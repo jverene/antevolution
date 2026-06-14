@@ -15,6 +15,7 @@
     statAnts: document.getElementById("stat-ants"),
     statHerbivores: document.getElementById("stat-herbivores"),
     statPredators: document.getElementById("stat-predators"),
+    statAdvanced: document.getElementById("stat-advanced"),
     statPlants: document.getElementById("stat-plants"),
     statSpeed: document.getElementById("stat-speed"),
     statSense: document.getElementById("stat-sense"),
@@ -22,6 +23,13 @@
     statRepro: document.getElementById("stat-repro"),
     statAggression: document.getElementById("stat-aggression"),
     statMutability: document.getElementById("stat-mutability"),
+    statThermal: document.getElementById("stat-thermal"),
+    statSociality: document.getElementById("stat-sociality"),
+    statWFood: document.getElementById("stat-wfood"),
+    statWFlee: document.getElementById("stat-wflee"),
+    statWShelter: document.getElementById("stat-wshelter"),
+    statWFarm: document.getElementById("stat-wfarm"),
+    statEvents: document.getElementById("stat-events"),
   };
 
   let lastStatUpdate = 0;
@@ -36,6 +44,7 @@
     ui.statAnts.textContent = s.ants.toLocaleString();
     ui.statHerbivores.textContent = s.herbivores.toLocaleString();
     ui.statPredators.textContent = s.predators.toLocaleString();
+    ui.statAdvanced.textContent = s.advanced.toLocaleString();
     ui.statPlants.textContent = s.plantCells.toLocaleString();
     ui.statSpeed.textContent = s.speed.toFixed(3);
     ui.statSense.textContent = s.sense.toFixed(2);
@@ -43,6 +52,19 @@
     ui.statRepro.textContent = s.repro.toFixed(1);
     ui.statAggression.textContent = s.aggression.toFixed(2);
     ui.statMutability.textContent = (s.mutability * 1000).toFixed(2) + "‰";
+    ui.statThermal.textContent = s.thermal.toFixed(2);
+    ui.statSociality.textContent = s.sociality.toFixed(2);
+    ui.statWFood.textContent = s.wFood.toFixed(2);
+    ui.statWFlee.textContent = s.wFlee.toFixed(2);
+    ui.statWShelter.textContent = s.wShelter.toFixed(2);
+    ui.statWFarm.textContent = s.wFarm.toFixed(2);
+
+    ui.statEvents.innerHTML = "";
+    for (let i = s.eventLog.length - 1; i >= 0; i--) {
+      const li = document.createElement("li");
+      li.textContent = `[${s.eventLog[i].tick.toLocaleString()}] ${s.eventLog[i].text}`;
+      ui.statEvents.appendChild(li);
+    }
   }
 
   function frame() {
@@ -54,7 +76,6 @@
 
     renderer.render(sim.world);
 
-    // Throttle stats updates.
     if (sim.ticks - lastStatUpdate > 20) {
       renderStats(sim.stats());
       lastStatUpdate = sim.ticks;
