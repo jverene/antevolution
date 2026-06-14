@@ -1,22 +1,23 @@
 /**
- * Simulation engine: drives the tick loop for movement, grazing,
- * predation, metabolism, reproduction, mutation, and death across
- * multiple species.
+ * Simulation engine: ECS tick loop for movement, grazing, predation,
+ * aggression, metabolism, reproduction, mutation, biome forcing,
+ * culture, reputation, and environmental modification.
  */
 
 const Simulation = (function () {
-  const { WorldGrid, WIDTH, HEIGHT, MAX_ORGANISMS_PER_CELL, SPECIES } = World;
-  const OrganismClass = Organism.Organism;
-  const { createSpeciesGenome, cloneGenome, mutate } = Genetics;
+  const { WorldGrid, WIDTH, HEIGHT, MAX_ORGANISMS_PER_CELL, SPECIES, BIOME, TILE } = World;
+  const { GENOME_LENGTH, PH, createSpeciesGenome, cloneGenome, mutate, copyMemome, createMemome } = Genetics;
+  const { posX, posY, energy, age, species, alive, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation } = ECS;
 
   const PARAM_RANGES = {
-    initialAnts: { min: 600, max: 3000 },
-    initialHerbivores: { min: 300, max: 1500 },
-    initialPredators: { min: 40, max: 200 },
-    initialPlantPatches: { min: 15, max: 60 },
-    plantPatchRadius: { min: 4, max: 10 },
-    plantPatchDensity: { min: 0.25, max: 0.65 },
-    nutrientSeedDensity: { min: 0.015, max: 0.045 },
+    initialAnts: { min: 400, max: 1600 },
+    initialHerbivores: { min: 400, max: 1600 },
+    initialPredators: { min: 100, max: 400 },
+    initialAdvanced: { min: 50, max: 150 },
+    initialPlantPatches: { min: 15, max: 50 },
+    plantPatchRadius: { min: 4, max: 9 },
+    plantPatchDensity: { min: 0.25, max: 0.6 },
+    nutrientSeedDensity: { min: 0.012, max: 0.035 },
     nutrientSeedMin: { min: 30, max: 60 },
     nutrientSeedMax: { min: 90, max: 160 },
     scatteredNutrientCells: { min: 8, max: 20 },
@@ -34,10 +35,14 @@ const Simulation = (function () {
   class SimulationEngine {
     constructor() {
       this.world = new WorldGrid();
-      this.organisms = [];
+      this.spatial = SpatialHash.createSpatialHash(WIDTH, HEIGHT, ECS);
       this.ticks = 0;
       this.running = true;
-      this.speed = 1; // simulation ticks per animation frame
+      this.speed = 1;
+      this.noiseSeed = Math.floor(Math.random() * 1000000);
+      this.eventLog = [];
+      this._senseScratch = [];
+      this._interactScratch = [];
       this.randomizeParams();
       this.reset();
     }
@@ -46,51 +51,55 @@ const Simulation = (function () {
       this.initialAnts = randInt(PARAM_RANGES.initialAnts.min, PARAM_RANGES.initialAnts.max);
       this.initialHerbivores = randInt(PARAM_RANGES.initialHerbivores.min, PARAM_RANGES.initialHerbivores.max);
       this.initialPredators = randInt(PARAM_RANGES.initialPredators.min, PARAM_RANGES.initialPredators.max);
+      this.initialAdvanced = randInt(PARAM_RANGES.initialAdvanced.min, PARAM_RANGES.initialAdvanced.max);
       this.initialPlantPatches = randInt(PARAM_RANGES.initialPlantPatches.min, PARAM_RANGES.initialPlantPatches.max);
       this.plantPatchRadius = randInt(PARAM_RANGES.plantPatchRadius.min, PARAM_RANGES.plantPatchRadius.max);
       this.plantPatchDensity = randFloat(PARAM_RANGES.plantPatchDensity.min, PARAM_RANGES.plantPatchDensity.max);
       this.nutrientSeedDensity = randFloat(PARAM_RANGES.nutrientSeedDensity.min, PARAM_RANGES.nutrientSeedDensity.max);
-      this.nutrientSeedMin = randInt(PARAM_RANGES.nutrientSeedMin.min, PARAM_RANGES.nutrientSeedMin.max);
+      this.nutrientSeedMin = randInt(PARAM_RANGES.nutrientSeedMin.min, PARAM_RANGES.nutrientSeedMax.max);
       this.nutrientSeedMax = randInt(PARAM_RANGES.nutrientSeedMax.min, PARAM_RANGES.nutrientSeedMax.max);
       this.scatteredNutrientCells = randInt(PARAM_RANGES.scatteredNutrientCells.min, PARAM_RANGES.scatteredNutrientCells.max);
       this.scatteredNutrientAmount = randInt(PARAM_RANGES.scatteredNutrientAmount.min, PARAM_RANGES.scatteredNutrientAmount.max);
     }
 
     reset() {
+      ECS.reset();
       this.world.reset();
-      this.organisms = [];
+      this.spatial.clear();
       this.ticks = 0;
+      this.eventLog = [];
+      this.noiseSeed = Math.floor(Math.random() * 1000000);
       this.randomizeParams();
 
-      // Seed baseline nutrients so the world isn't permanently barren.
-      this.world.seedNutrients(
-        this.nutrientSeedDensity,
-        this.nutrientSeedMin,
-        this.nutrientSeedMax
-      );
+      this.world.generateBiomes(this.noiseSeed);
+      this.world.seedNutrients(this.nutrientSeedDensity, this.nutrientSeedMin, this.nutrientSeedMax);
 
-      // Seed plant patches.
       for (let i = 0; i < this.initialPlantPatches; i++) {
         this.spawnRandomPlantPatch();
       }
-
-      // Seed scattered nutrient hotspots for background regrowth.
       this.seedScatteredNutrients();
 
-      // Seed ants.
       this.seedSpecies(SPECIES.ANT, this.initialAnts);
-      // Seed herbivores.
       this.seedSpecies(SPECIES.HERBIVORE, this.initialHerbivores);
-      // Seed predators.
       this.seedSpecies(SPECIES.PREDATOR, this.initialPredators);
+      this.seedSpecies(SPECIES.ADVANCED, this.initialAdvanced);
+
+      this.spatial.rebuild();
     }
 
-    seedSpecies(species, count) {
+    seedSpecies(sp, count) {
       for (let i = 0; i < count; i++) {
         const x = Math.floor(Math.random() * WIDTH);
         const y = Math.floor(Math.random() * HEIGHT);
-        if (this.world.addOrganism(x, y, species)) {
-          this.organisms.push(new OrganismClass(x, y, species, createSpeciesGenome(species)));
+        if (this.world.addOrganism(x, y, sp)) {
+          const g = createSpeciesGenome(sp);
+          const startEnergy = sp === SPECIES.ADVANCED ? 60 + Math.random() * 40 : 40 + Math.random() * 40;
+          const id = create(x, y, sp, startEnergy, g);
+          if (id >= 0) {
+            // Advanced agents start with no cultural knowledge; innovation must arise and spread.
+          } else {
+            this.world.removeOrganism(x, y, sp);
+          }
         }
       }
     }
@@ -119,260 +128,54 @@ const Simulation = (function () {
       return this.running;
     }
 
+    logEvent(text) {
+      this.eventLog.push({ tick: this.ticks, text });
+      if (this.eventLog.length > 20) this.eventLog.shift();
+    }
+
     /**
      * Run one simulation tick.
      */
     tick() {
       this.ticks++;
-      const world = this.world;
 
-      // 1. Ecology: plants regrow from nutrients.
-      world.growPlants();
+      this.world.growPlants();
+      if (this.ticks % 50 === 0) {
+        this.world.decayTiles();
+      }
 
-      // 2. Occasional new plant patches and nutrient hotspots.
-      if (Math.random() < 0.02 || world.plantCellCount() < 200) {
+      if (Math.random() < 0.02 || this.world.plantCellCount() < 200) {
         this.spawnRandomPlantPatch();
       }
       if (Math.random() < 0.03) {
         this.seedScatteredNutrients();
       }
 
-      // 3. Randomize processing order to avoid directional bias.
-      this.shuffleOrganisms();
+      this.shuffleActive();
 
-      const organisms = this.organisms;
-      const nextOrganisms = [];
+      const n = ECS.activeCount;
+      for (let i = 0; i < n; i++) {
+        const id = active[i];
+        if (!alive[id]) continue;
 
-      for (let i = 0; i < organisms.length; i++) {
-        const org = organisms[i];
-        if (org.dead) continue;
+        this.decideAndMove(id);
+        this.interact(id);
+        this.metabolize(id);
 
-        // 4. Sense and move.
-        this.moveOrganism(org);
+        if (!alive[id]) continue;
 
-        // 5. Feed.
-        if (org.species === SPECIES.PREDATOR) {
-          org.energy += this.attemptPredation(org);
-        } else {
-          // Ants and herbivores graze on plants.
-          const plantsHere = world.getPlantBiomass(org.x, org.y);
-          if (plantsHere > 0) {
-            const bite = 2 * org.pFoodEfficiency;
-            const eaten = world.takePlantBiomass(org.x, org.y, bite);
-            org.energy += eaten;
-          }
-        }
-
-        // 6. Metabolize and age.
-        org.energy -= org.pMetabolism;
-        org.age++;
-
-        // 7. Death.
-        if (org.energy <= 0 || org.age > org.pLongevity) {
-          world.removeOrganism(org.x, org.y, org.species);
-          continue;
-        }
-
-        nextOrganisms.push(org);
-
-        // 8. Reproduce (asexual budding, same species, with mutation).
-        if (org.energy > org.pReproThreshold + 25) {
-          const child = this.tryReproduce(org);
-          if (child) {
-            nextOrganisms.push(child);
-          }
+        if (age[id] % 20 === 0 && energy[id] > phenome[id * PH.COUNT + PH.REPRO_THRESHOLD] + 25) {
+          this.tryReproduce(id);
         }
       }
 
-      this.organisms = nextOrganisms;
+      cleanup();
+      this.spatial.rebuild();
     }
 
-    moveOrganism(org) {
-      const world = this.world;
-
-      // 1. Choose a primary movement vector.
-      let dx = 0;
-      let dy = 0;
-
-      if (Math.random() < org.pTurnBias) {
-        dx = Math.floor(Math.random() * 3) - 1;
-        dy = Math.floor(Math.random() * 3) - 1;
-      } else if (org.species === SPECIES.PREDATOR) {
-        const target = world.findBestPrey(org.x, org.y, org.pSenseRange);
-        if (target) {
-          dx = Math.sign(target.x - org.x);
-          dy = Math.sign(target.y - org.y);
-        } else if (Math.random() < org.pExploreBias) {
-          const dir = this.randomDirection();
-          dx = dir.dx;
-          dy = dir.dy;
-        } else {
-          dx = Math.floor(Math.random() * 3) - 1;
-          dy = Math.floor(Math.random() * 3) - 1;
-        }
-      } else {
-        // Ants and herbivores forage for plants.
-        const target = world.findBestPlants(org.x, org.y, org.pSenseRange);
-        if (target) {
-          dx = Math.sign(target.x - org.x);
-          dy = Math.sign(target.y - org.y);
-        } else if (Math.random() < org.pExploreBias) {
-          const dir = this.randomDirection();
-          dx = dir.dx;
-          dy = dir.dy;
-        } else {
-          dx = Math.floor(Math.random() * 3) - 1;
-          dy = Math.floor(Math.random() * 3) - 1;
-        }
-      }
-
-      if (dx === 0 && dy === 0) return;
-
-      // 2. Speed determines number of grid steps this tick (max 3).
-      let steps = Math.floor(org.pSpeed);
-      if (Math.random() < org.pSpeed - steps) steps++;
-      steps = Math.max(1, Math.min(steps, 3));
-
-      let nx = org.x;
-      let ny = org.y;
-      let moved = false;
-
-      for (let s = 0; s < steps; s++) {
-        const tx = ((nx + dx) + WIDTH) % WIDTH;
-        const ty = ((ny + dy) + HEIGHT) % HEIGHT;
-
-        if (world.getTotalOrganisms(tx, ty) < MAX_ORGANISMS_PER_CELL) {
-          if (!moved) {
-            world.removeOrganism(nx, ny, org.species);
-            moved = true;
-          }
-          world.addOrganism(tx, ty, org.species);
-          nx = tx;
-          ny = ty;
-        } else {
-          // Blocked: try a random alternative direction once.
-          const alt = this.randomDirection();
-          const ax = ((nx + alt.dx) + WIDTH) % WIDTH;
-          const ay = ((ny + alt.dy) + HEIGHT) % HEIGHT;
-          if (world.getTotalOrganisms(ax, ay) < MAX_ORGANISMS_PER_CELL) {
-            if (!moved) {
-              world.removeOrganism(nx, ny, org.species);
-              moved = true;
-            }
-            world.addOrganism(ax, ay, org.species);
-            nx = ax;
-            ny = ay;
-          } else {
-            break; // fully blocked
-          }
-        }
-      }
-
-      if (moved) {
-        org.x = nx;
-        org.y = ny;
-      }
-    }
-
-    randomDirection() {
-      // 8-way movement, excluding the (0,0) stay direction.
-      const dir = Math.floor(Math.random() * 8);
-      const dx = (dir % 3) - 1;
-      const dy = Math.floor(dir / 3) - 1;
-      if (dx === 0 && dy === 0) {
-        // dir === 4 maps to (0,0); bump it to (1,0).
-        return { dx: 1, dy: 0 };
-      }
-      return { dx, dy };
-    }
-
-    /**
-     * Predators attempt to catch prey in their current cell.
-     * Returns energy gained (0 if no catch).
-     */
-    attemptPredation(predator) {
-      if (predator.species !== SPECIES.PREDATOR) return 0;
-      const world = this.world;
-      const x = predator.x;
-      const y = predator.y;
-      const antCount = world.getOrganismCount(x, y, SPECIES.ANT);
-      const herbCount = world.getOrganismCount(x, y, SPECIES.HERBIVORE);
-      if (antCount + herbCount === 0) return 0;
-
-      // Choose prey species weighted by local abundance.
-      const preySpecies = Math.random() < antCount / (antCount + herbCount) ? SPECIES.ANT : SPECIES.HERBIVORE;
-
-      // Find a living prey organism at this location.
-      const prey = this.findLivingPreyAt(x, y, preySpecies);
-      if (!prey) return 0;
-
-      // Catch chance depends on speed advantage, predator aggression,
-      // and prey defense (aggression + nearby allies via sociality).
-      const nearbyAllies = world.getOrganismCount(x, y, prey.species) - 1;
-      const preyDefense = prey.pAggression + prey.pSociality * 0.5 + nearbyAllies * 0.15;
-      const speedAdvantage = predator.pSpeed / Math.max(0.1, prey.pSpeed);
-      const aggressionAdvantage = predator.pAggression / Math.max(0.1, preyDefense + 1);
-      const catchChance = Math.min(0.85, 0.2 + speedAdvantage * 0.22 + aggressionAdvantage * 0.22);
-
-      if (Math.random() < catchChance) {
-        const energyGain = 28 * predator.pFoodEfficiency;
-        prey.dead = true;
-        world.removeOrganism(prey.x, prey.y, prey.species);
-        return energyGain;
-      }
-      return 0;
-    }
-
-    /**
-     * Scan for a living prey organism of the given species at (x, y).
-     * Starts at a random offset to avoid always killing the same individual.
-     */
-    findLivingPreyAt(x, y, species) {
-      const organisms = this.organisms;
-      const n = organisms.length;
-      if (n === 0) return null;
-      let idx = Math.floor(Math.random() * n);
-      for (let k = 0; k < n; k++) {
-        const org = organisms[(idx + k) % n];
-        if (!org.dead && org.species === species && org.x === x && org.y === y) {
-          return org;
-        }
-      }
-      return null;
-    }
-
-    tryReproduce(parent) {
-      const world = this.world;
-      // Find an empty or available adjacent cell for the child.
-      const candidates = [];
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const tx = ((parent.x + dx) + WIDTH) % WIDTH;
-          const ty = ((parent.y + dy) + HEIGHT) % HEIGHT;
-          if (world.getTotalOrganisms(tx, ty) < MAX_ORGANISMS_PER_CELL) {
-            candidates.push({ x: tx, y: ty });
-          }
-        }
-      }
-      if (candidates.length === 0) return null;
-
-      const spot = candidates[Math.floor(Math.random() * candidates.length)];
-      const childGenome = cloneGenome(parent.genome);
-      mutate(childGenome, parent.pMutability);
-      mutate(parent.genome, parent.pMutability * 0.3); // parent also mutates slightly (somatic / late-life)
-      parent.refresh();
-
-      const child = new OrganismClass(spot.x, spot.y, parent.species, childGenome);
-      child.energy = 25;
-      parent.energy -= 35;
-
-      world.addOrganism(spot.x, spot.y, parent.species);
-      return child;
-    }
-
-    shuffleOrganisms() {
-      const arr = this.organisms;
-      for (let i = arr.length - 1; i > 0; i--) {
+    shuffleActive() {
+      const arr = active;
+      for (let i = ECS.activeCount - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         const tmp = arr[i];
         arr[i] = arr[j];
@@ -380,32 +183,621 @@ const Simulation = (function () {
       }
     }
 
+    /**
+     * Weighted-utility movement: evaluate each of the 8 neighbor directions
+     * plus staying still, pick the best one, and move up to speed steps.
+     */
+    decideAndMove(id) {
+      const pOff = id * PH.COUNT;
+      const ph = phenome;
+      const sp = species[id];
+      const sense = ph[pOff + PH.SENSE_RANGE];
+      const x = posX[id];
+      const y = posY[id];
+
+      // Gather sensory summaries from the surrounding area.
+      const senseData = this.summarizeSenses(id, x, y, sense);
+
+      // Random turn bias: occasionally ignore sensory input and move randomly.
+      if (Math.random() < ph[pOff + PH.TURN_BIAS]) {
+        const alt = this.randomDirection();
+        this.executeMove(id, alt.dx, alt.dy);
+        return;
+      }
+
+      let bestDx = 0;
+      let bestDy = 0;
+      let bestScore = -Infinity;
+
+      // Evaluate the 8 movement directions plus staying put.
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const score = this.utilityScore(id, dx, dy, senseData);
+          if (score > bestScore) {
+            bestScore = score;
+            bestDx = dx;
+            bestDy = dy;
+          }
+        }
+      }
+
+      // If staying still won, nudge toward a random direction so agents don't starve in place.
+      if (bestDx === 0 && bestDy === 0) {
+        const alt = this.randomDirection();
+        bestDx = alt.dx;
+        bestDy = alt.dy;
+      }
+
+      this.executeMove(id, bestDx, bestDy);
+    }
+
+    executeMove(id, dx, dy) {
+      const pOff = id * PH.COUNT;
+      const sp = species[id];
+      const speed = phenome[pOff + PH.SPEED];
+      const x = posX[id];
+      const y = posY[id];
+
+      // Speed determines number of grid steps this tick (max 3).
+      let steps = Math.floor(speed);
+      if (Math.random() < speed - steps) steps++;
+      steps = Math.max(1, Math.min(steps, 3));
+
+      let cx = x;
+      let cy = y;
+      let moved = false;
+
+      for (let s = 0; s < steps; s++) {
+        const tx = ((cx + dx) + WIDTH) % WIDTH;
+        const ty = ((cy + dy) + HEIGHT) % HEIGHT;
+
+        if (this.world.getTotalOrganisms(tx, ty) < MAX_ORGANISMS_PER_CELL) {
+          if (!moved) {
+            this.world.removeOrganism(cx, cy, sp);
+            this.spatial.move(id, cx, cy, tx, ty);
+            moved = true;
+          } else {
+            this.spatial.move(id, cx, cy, tx, ty);
+            this.world.removeOrganism(cx, cy, sp);
+          }
+          this.world.addOrganism(tx, ty, sp);
+          cx = tx;
+          cy = ty;
+        } else {
+          // Blocked: try a random alternative direction once.
+          const alt = this.randomDirection();
+          const ax = ((cx + alt.dx) + WIDTH) % WIDTH;
+          const ay = ((cy + alt.dy) + HEIGHT) % HEIGHT;
+          if (this.world.getTotalOrganisms(ax, ay) < MAX_ORGANISMS_PER_CELL) {
+            if (!moved) {
+              this.world.removeOrganism(cx, cy, sp);
+              this.spatial.move(id, cx, cy, ax, ay);
+              moved = true;
+            } else {
+              this.spatial.move(id, cx, cy, ax, ay);
+              this.world.removeOrganism(cx, cy, sp);
+            }
+            this.world.addOrganism(ax, ay, sp);
+            cx = ax;
+            cy = ay;
+          } else {
+            break;
+          }
+        }
+      }
+
+      if (moved) {
+        posX[id] = cx;
+        posY[id] = cy;
+      }
+    }
+
+    randomDirection() {
+      const dir = Math.floor(Math.random() * 8);
+      const dx = (dir % 3) - 1;
+      const dy = Math.floor(dir / 3) - 1;
+      if (dx === 0 && dy === 0) return { dx: 1, dy: 0 };
+      return { dx, dy };
+    }
+
+    /**
+     * Collect relevant sensory information around (x, y).
+     * Returns unit direction vectors and counts for each stimulus.
+     */
+    summarizeSenses(id, x, y, radius) {
+      const selfSpecies = species[id];
+      const r = Math.max(1, Math.min(radius, 10));
+      const r2 = r * r;
+
+      const out = {
+        foodDx: 0,
+        foodDy: 0,
+        foodStrength: 0,
+        predatorDx: 0,
+        predatorDy: 0,
+        predatorCount: 0,
+        sameDx: 0,
+        sameDy: 0,
+        sameCount: 0,
+        otherDx: 0,
+        otherDy: 0,
+        otherCount: 0,
+        shelterDx: 0,
+        shelterDy: 0,
+        shelterCount: 0,
+        farmDx: 0,
+        farmDy: 0,
+        farmCount: 0,
+      };
+
+      // Find best food direction (plants for grazers, prey for predators).
+      let bestFoodX = x;
+      let bestFoodY = y;
+      let bestFoodScore = -1;
+
+      if (selfSpecies === SPECIES.PREDATOR) {
+        const scratch = this._senseScratch;
+        scratch.length = 0;
+        this.spatial.queryRadius(x, y, r, scratch);
+        for (let i = 0; i < scratch.length; i++) {
+          const other = scratch[i];
+          if (other === id || !alive[other]) continue;
+          const osp = species[other];
+          if (osp === SPECIES.PREDATOR || osp === SPECIES.NONE) continue;
+          const dx = this.wrapDelta(posX[other] - x, WIDTH);
+          const dy = this.wrapDelta(posY[other] - y, HEIGHT);
+          const distSq = dx * dx + dy * dy;
+          if (distSq > r2 || distSq === 0) continue;
+          const score = 1 / Math.sqrt(distSq);
+          if (score > bestFoodScore) {
+            bestFoodScore = score;
+            bestFoodX = x + dx;
+            bestFoodY = y + dy;
+          }
+        }
+      } else {
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const b = this.world.getPlantBiomass(x + dx, y + dy);
+            if (b > bestFoodScore) {
+              bestFoodScore = b;
+              bestFoodX = x + dx;
+              bestFoodY = y + dy;
+            }
+          }
+        }
+      }
+
+      if (bestFoodScore > 0) {
+        const fdx = this.wrapDelta(bestFoodX - x, WIDTH);
+        const fdy = this.wrapDelta(bestFoodY - y, HEIGHT);
+        const fdist = Math.sqrt(fdx * fdx + fdy * fdy) || 1;
+        out.foodDx = fdx / fdist;
+        out.foodDy = fdy / fdist;
+        out.foodStrength = bestFoodScore;
+      }
+
+      // Scan entities for predators, same species, and other species.
+      const scratch = this._senseScratch;
+      scratch.length = 0;
+      this.spatial.queryRadius(x, y, r, scratch);
+
+      let pdx = 0, pdy = 0;
+      let sdx = 0, sdy = 0;
+      let odx = 0, ody = 0;
+
+      for (let i = 0; i < scratch.length; i++) {
+        const other = scratch[i];
+        if (other === id || !alive[other]) continue;
+        const dx = this.wrapDelta(posX[other] - x, WIDTH);
+        const dy = this.wrapDelta(posY[other] - y, HEIGHT);
+        const distSq = dx * dx + dy * dy;
+        if (distSq > r2 || distSq === 0) continue;
+        const dist = Math.sqrt(distSq);
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const osp = species[other];
+
+        if (osp === SPECIES.PREDATOR) {
+          pdx += nx;
+          pdy += ny;
+          out.predatorCount++;
+        } else if (osp === selfSpecies) {
+          sdx += nx;
+          sdy += ny;
+          out.sameCount++;
+        } else {
+          odx += nx;
+          ody += ny;
+          out.otherCount++;
+        }
+      }
+
+      if (out.predatorCount > 0) {
+        const plen = Math.sqrt(pdx * pdx + pdy * pdy) || 1;
+        out.predatorDx = pdx / plen;
+        out.predatorDy = pdy / plen;
+      }
+      if (out.sameCount > 0) {
+        const slen = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
+        out.sameDx = sdx / slen;
+        out.sameDy = sdy / slen;
+      }
+      if (out.otherCount > 0) {
+        const olen = Math.sqrt(odx * odx + ody * ody) || 1;
+        out.otherDx = odx / olen;
+        out.otherDy = ody / olen;
+      }
+
+      // Scan modified tiles.
+      let shx = 0, shy = 0, fmx = 0, fmy = 0;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const tt = this.world.getTileType(x + dx, y + dy);
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (tt === TILE.SHELTER) {
+            shx += dx / dist;
+            shy += dy / dist;
+            out.shelterCount++;
+          } else if (tt === TILE.FARM) {
+            fmx += dx / dist;
+            fmy += dy / dist;
+            out.farmCount++;
+          }
+        }
+      }
+      if (out.shelterCount > 0) {
+        const slen = Math.sqrt(shx * shx + shy * shy) || 1;
+        out.shelterDx = shx / slen;
+        out.shelterDy = shy / slen;
+      }
+      if (out.farmCount > 0) {
+        const flen = Math.sqrt(fmx * fmx + fmy * fmy) || 1;
+        out.farmDx = fmx / flen;
+        out.farmDy = fmy / flen;
+      }
+
+      return out;
+    }
+
+    wrapDelta(delta, dim) {
+      if (delta > dim / 2) return delta - dim;
+      if (delta < -dim / 2) return delta + dim;
+      return delta;
+    }
+
+    /**
+     * Compute utility of moving in direction (dx, dy).
+     */
+    utilityScore(id, dx, dy, s) {
+      const pOff = id * PH.COUNT;
+      const ph = phenome;
+
+      // Normalize direction vector.
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const ux = dx / dist;
+      const uy = dy / dist;
+
+      // Desired direction is a weighted sum of stimulus vectors.
+      let desiredDx = 0;
+      let desiredDy = 0;
+
+      desiredDx += ph[pOff + PH.W_FOOD] * s.foodDx;
+      desiredDy += ph[pOff + PH.W_FOOD] * s.foodDy;
+
+      desiredDx -= ph[pOff + PH.W_FLEE_PREDATOR] * s.predatorDx;
+      desiredDy -= ph[pOff + PH.W_FLEE_PREDATOR] * s.predatorDy;
+
+      desiredDx += ph[pOff + PH.W_AGGRESSION_SAME] * s.sameDx;
+      desiredDy += ph[pOff + PH.W_AGGRESSION_SAME] * s.sameDy;
+
+      desiredDx += ph[pOff + PH.W_AGGRESSION_OTHER] * s.otherDx;
+      desiredDy += ph[pOff + PH.W_AGGRESSION_OTHER] * s.otherDy;
+
+      desiredDx += ph[pOff + PH.W_SHELTER] * s.shelterDx;
+      desiredDy += ph[pOff + PH.W_SHELTER] * s.shelterDy;
+
+      desiredDx += ph[pOff + PH.W_FARM] * s.farmDx;
+      desiredDy += ph[pOff + PH.W_FARM] * s.farmDy;
+
+      // Score is alignment with desired direction plus exploration noise.
+      let score = desiredDx * ux + desiredDy * uy;
+      score += ph[pOff + PH.W_EXPLORE] * (Math.random() - 0.5) * 0.5;
+
+      // Penalize staying still to keep agents moving.
+      if (dx === 0 && dy === 0) score -= 0.5;
+
+      return score;
+    }
+
+    /**
+     * Interaction phase: feeding, aggression, teaching, tile modification.
+     */
+    interact(id) {
+      const pOff = id * PH.COUNT;
+      const ph = phenome;
+      const sp = species[id];
+      const x = posX[id];
+      const y = posY[id];
+
+      if (sp === SPECIES.PREDATOR) {
+        energy[id] += this.attemptPredation(id);
+      } else {
+        // Graze on plants.
+        const plantsHere = this.world.getPlantBiomass(x, y);
+        if (plantsHere > 0) {
+          const bite = 2 * ph[pOff + PH.FOOD_EFFICIENCY];
+          const eaten = this.world.takePlantBiomass(x, y, bite);
+          energy[id] += eaten;
+        }
+      }
+
+      // Aggression: attack neighbors of same or other species.
+      this.handleAggression(id);
+
+      // Advanced / social agents teach and modify tiles.
+      if (sp === SPECIES.ADVANCED || ph[pOff + PH.SOCIALITY] > 1.0) {
+        this.handleTeaching(id);
+      }
+      if (sp === SPECIES.ADVANCED) {
+        this.handleTileModification(id);
+      }
+    }
+
+    handleAggression(id) {
+      const pOff = id * PH.COUNT;
+      const ph = phenome;
+      const sp = species[id];
+      const x = posX[id];
+      const y = posY[id];
+      const aggression = ph[pOff + PH.AGGRESSION];
+      // Aggression is currently a minor scuffle; keep it rare to avoid destabilizing the ecosystem.
+      if (aggression < 1.5 || Math.random() > 0.1) return;
+
+      this._interactScratch = this._interactScratch || [];
+      this._interactScratch.length = 0;
+      this.spatial.queryCell(x, y, this._interactScratch);
+
+      for (let i = 0; i < this._interactScratch.length; i++) {
+        const other = this._interactScratch[i];
+        if (other === id || !alive[other]) continue;
+        const osp = species[other];
+        const weight = osp === sp ? ph[pOff + PH.W_AGGRESSION_SAME] : ph[pOff + PH.W_AGGRESSION_OTHER];
+        if (weight <= 0) continue;
+
+        // Attack probability scales with aggression, target defense, and energy.
+        const oOff = other * PH.COUNT;
+        const targetDefense = phenome[oOff + PH.AGGRESSION] + phenome[oOff + PH.SOCIALITY] * 0.3;
+        const chance = Math.min(0.6, 0.05 + (aggression - targetDefense) * 0.05 + ph[pOff + PH.SPEED] * 0.05);
+        if (Math.random() < chance) {
+          // Damage costs energy to both parties; may kill weaker target.
+          const damage = 5 * aggression;
+          energy[other] -= damage;
+          energy[id] -= damage * 0.2;
+          if (osp === sp) {
+            setReputation(other, id, -0.5);
+          }
+          if (energy[other] <= 0 && alive[other]) {
+            alive[other] = 0;
+            this.world.removeOrganism(posX[other], posY[other], osp);
+            energy[id] += 5;
+          }
+        }
+      }
+    }
+
+    attemptPredation(predatorId) {
+      const x = posX[predatorId];
+      const y = posY[predatorId];
+
+      this._interactScratch = this._interactScratch || [];
+      this._interactScratch.length = 0;
+      this.spatial.queryCell(x, y, this._interactScratch);
+
+      let preyId = -1;
+      let bestScore = -Infinity;
+      const pOff = predatorId * PH.COUNT;
+      const predatorSpeed = phenome[pOff + PH.SPEED];
+      const predatorAggression = phenome[pOff + PH.AGGRESSION];
+
+      for (let i = 0; i < this._interactScratch.length; i++) {
+        const other = this._interactScratch[i];
+        if (!alive[other]) continue;
+        const osp = species[other];
+        if (osp === SPECIES.PREDATOR || osp === SPECIES.NONE) continue;
+        const oOff = other * PH.COUNT;
+        const preySpeed = phenome[oOff + PH.SPEED];
+        const preyDefense = phenome[oOff + PH.AGGRESSION] + phenome[oOff + PH.SOCIALITY] * 0.5;
+        const speedAdvantage = predatorSpeed / Math.max(0.1, preySpeed);
+        const energyValue = osp === SPECIES.HERBIVORE ? 1.5 : 1.0;
+        const score = speedAdvantage * 2 - preyDefense + energyValue + Math.random();
+        if (score > bestScore) {
+          bestScore = score;
+          preyId = other;
+        }
+      }
+
+      if (preyId < 0) return 0;
+
+      const oOff = preyId * PH.COUNT;
+      const nearbyAllies = this.world.getOrganismCount(x, y, species[preyId]) - 1;
+      const preyDefense = phenome[oOff + PH.AGGRESSION] + phenome[oOff + PH.SOCIALITY] * 0.5 + nearbyAllies * 0.15;
+      const speedAdvantage = phenome[pOff + PH.SPEED] / Math.max(0.1, phenome[oOff + PH.SPEED]);
+      const aggressionAdvantage = predatorAggression / Math.max(0.1, preyDefense + 1);
+      const catchChance = Math.min(0.9, 0.35 + speedAdvantage * 0.2 + aggressionAdvantage * 0.2);
+
+      if (Math.random() < catchChance) {
+        const energyGain = 40 * phenome[pOff + PH.FOOD_EFFICIENCY];
+        alive[preyId] = 0;
+        this.world.removeOrganism(posX[preyId], posY[preyId], species[preyId]);
+        return energyGain;
+      }
+      return 0;
+    }
+
+    handleTeaching(id) {
+      const pOff = id * PH.COUNT;
+      const ph = phenome;
+      const sociality = ph[pOff + PH.SOCIALITY];
+      const learning = ph[pOff + PH.LEARNING_RATE];
+      if (sociality < 0.3 || learning < 0.05) return;
+
+      const x = posX[id];
+      const y = posY[id];
+      this._interactScratch = this._interactScratch || [];
+      this._interactScratch.length = 0;
+      this.spatial.queryCell(x, y, this._interactScratch);
+
+      for (let i = 0; i < this._interactScratch.length; i++) {
+        const other = this._interactScratch[i];
+        if (other === id || !alive[other]) continue;
+        const oOff = other * PH.COUNT;
+        if (phenome[oOff + PH.LEARNING_RATE] < 0.05) continue;
+        // Successful agents teach; struggling agents learn.
+        if (energy[id] > energy[other] && Math.random() < 0.05 * sociality) {
+          this.teachMemome(id, other);
+          setReputation(other, id, 0.3);
+        }
+      }
+    }
+
+    teachMemome(teacherId, studentId) {
+      const tOff = teacherId * Genetics.MEMOME_LENGTH;
+      const sOff = studentId * Genetics.MEMOME_LENGTH;
+      const rate = phenome[studentId * PH.COUNT + PH.LEARNING_RATE] * 0.2;
+      for (let i = 0; i < Genetics.MEMOME_LENGTH; i++) {
+        memome[sOff + i] += (memome[tOff + i] - memome[sOff + i]) * rate;
+      }
+    }
+
+    handleTileModification(id) {
+      const pOff = id * PH.COUNT;
+      const ph = phenome;
+      const x = posX[id];
+      const y = posY[id];
+      const e = energy[id];
+
+      // Memome-derived shelter/farm weights: memome[0] = shelter, memome[1] = farm.
+      const mOff = id * Genetics.MEMOME_LENGTH;
+      const shelterMeme = memome[mOff + 0];
+      const farmMeme = memome[mOff + 1];
+
+      const wShelter = ph[pOff + PH.W_SHELTER] + shelterMeme;
+      const wFarm = ph[pOff + PH.W_FARM] + farmMeme;
+
+      // Build shelter if cold and motivated.
+      const temp = this.world.getTemperature(x, y);
+      if (wShelter > 0.8 && temp < 0.35 && e > 90) {
+        if (this.world.buildShelter(x, y)) {
+          energy[id] -= 30;
+          if (this.eventLog.filter((e) => e.text.includes("shelter")).length === 0) {
+            this.logEvent("First shelter built");
+          }
+        }
+      }
+
+      // Build farm if on fertile land and motivated.
+      if (wFarm > 0.8 && e > 120) {
+        if (this.world.buildFarm(x, y)) {
+          energy[id] -= 40;
+          // Add some initial biomass to the farm.
+          this.world.addPlantBiomass(x, y, 200);
+          if (this.eventLog.filter((e) => e.text.includes("farm")).length === 0) {
+            this.logEvent("First farm cultivated");
+          }
+        }
+      }
+    }
+
+    metabolize(id) {
+      const pOff = id * PH.COUNT;
+      const ph = phenome;
+      const x = posX[id];
+      const y = posY[id];
+
+      let cost = ph[pOff + PH.METABOLISM];
+      cost += this.world.getAmbientCost(x, y, ph[pOff + PH.THERMAL_EFF]);
+      energy[id] -= cost;
+      age[id]++;
+
+      if (energy[id] <= 0 || age[id] > ph[pOff + PH.LONGEVITY]) {
+        alive[id] = 0;
+        this.world.removeOrganism(x, y, species[id]);
+      }
+    }
+
+    tryReproduce(parentId) {
+      const px = posX[parentId];
+      const py = posY[parentId];
+      const sp = species[parentId];
+
+      const candidates = [];
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const tx = ((px + dx) + WIDTH) % WIDTH;
+          const ty = ((py + dy) + HEIGHT) % HEIGHT;
+          if (this.world.getTotalOrganisms(tx, ty) < MAX_ORGANISMS_PER_CELL) {
+            candidates.push({ x: tx, y: ty });
+          }
+        }
+      }
+      if (candidates.length === 0) return;
+
+      const spot = candidates[Math.floor(Math.random() * candidates.length)];
+      if (!this.world.addOrganism(spot.x, spot.y, sp)) return;
+
+      const childGenome = cloneGenome(genome.subarray(parentId * GENOME_LENGTH, (parentId + 1) * GENOME_LENGTH));
+      const pMut = phenome[parentId * PH.COUNT + PH.MUTABILITY];
+      mutate(childGenome, pMut);
+      mutate(genome.subarray(parentId * GENOME_LENGTH, (parentId + 1) * GENOME_LENGTH), pMut * 0.3);
+      refreshPhenome(parentId);
+
+      const childId = create(spot.x, spot.y, sp, 25, childGenome);
+      if (childId < 0) {
+        this.world.removeOrganism(spot.x, spot.y, sp);
+        return;
+      }
+
+      // Inherit memome from parent with small innovation (vertical cultural transmission).
+      const cOff = childId * Genetics.MEMOME_LENGTH;
+      const pOff = parentId * Genetics.MEMOME_LENGTH;
+      for (let i = 0; i < Genetics.MEMOME_LENGTH; i++) {
+        memome[cOff + i] = memome[pOff + i] + (Math.random() - 0.5) * 0.02;
+      }
+
+      energy[parentId] -= 35;
+    }
+
     // Aggregate statistics for the UI.
     stats() {
-      const organisms = this.organisms;
-      const n = organisms.length;
-      let ants = 0,
-        herbivores = 0,
-        predators = 0;
-      let speed = 0,
-        sense = 0,
-        metabolism = 0,
-        repro = 0,
-        mutability = 0,
-        aggression = 0;
+      let ants = 0, herbivores = 0, predators = 0, advanced = 0;
+      let speed = 0, sense = 0, metabolism = 0, repro = 0, mutability = 0, aggression = 0;
+      let thermal = 0, sociality = 0, wFood = 0, wFlee = 0, wShelter = 0, wFarm = 0;
+      const n = ECS.activeCount;
 
       for (let i = 0; i < n; i++) {
-        const a = organisms[i];
-        if (a.species === SPECIES.ANT) ants++;
-        else if (a.species === SPECIES.HERBIVORE) herbivores++;
-        else if (a.species === SPECIES.PREDATOR) predators++;
+        const id = active[i];
+        const sp = species[id];
+        const pOff = id * PH.COUNT;
+        if (sp === SPECIES.ANT) ants++;
+        else if (sp === SPECIES.HERBIVORE) herbivores++;
+        else if (sp === SPECIES.PREDATOR) predators++;
+        else if (sp === SPECIES.ADVANCED) advanced++;
 
-        speed += a.pSpeed;
-        sense += a.pSenseRange;
-        metabolism += a.pMetabolism;
-        repro += a.pReproThreshold;
-        mutability += a.pMutability;
-        aggression += a.pAggression;
+        speed += phenome[pOff + PH.SPEED];
+        sense += phenome[pOff + PH.SENSE_RANGE];
+        metabolism += phenome[pOff + PH.METABOLISM];
+        repro += phenome[pOff + PH.REPRO_THRESHOLD];
+        mutability += phenome[pOff + PH.MUTABILITY];
+        aggression += phenome[pOff + PH.AGGRESSION];
+        thermal += phenome[pOff + PH.THERMAL_EFF];
+        sociality += phenome[pOff + PH.SOCIALITY];
+        wFood += phenome[pOff + PH.W_FOOD];
+        wFlee += phenome[pOff + PH.W_FLEE_PREDATOR];
+        wShelter += phenome[pOff + PH.W_SHELTER];
+        wFarm += phenome[pOff + PH.W_FARM];
       }
 
       return {
@@ -413,6 +805,7 @@ const Simulation = (function () {
         ants,
         herbivores,
         predators,
+        advanced,
         plantCells: this.world.plantCellCount(),
         speed: n ? speed / n : 0,
         sense: n ? sense / n : 0,
@@ -420,6 +813,13 @@ const Simulation = (function () {
         repro: n ? repro / n : 0,
         mutability: n ? mutability / n : 0,
         aggression: n ? aggression / n : 0,
+        thermal: n ? thermal / n : 0,
+        sociality: n ? sociality / n : 0,
+        wFood: n ? wFood / n : 0,
+        wFlee: n ? wFlee / n : 0,
+        wShelter: n ? wShelter / n : 0,
+        wFarm: n ? wFarm / n : 0,
+        eventLog: this.eventLog.slice(-5),
       };
     }
   }
