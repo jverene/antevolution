@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ant Evolution Simulation</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="world"></canvas>
+
+  <div id="ui">
+    <h1>Ant Evolution</h1>
+    <div class="controls">
+      <button id="btn-play">Pause</button>
+      <button id="btn-reset">Reset</button>
+      <label>
+        Speed
+        <input id="speed" type="range" min="1" max="20" value="1" />
+      </label>
+    </div>
+    <div class="stats">
+      <div>Ticks: <span id="stat-ticks">0</span></div>
+      <div>Ants: <span id="stat-ants">0</span></div>
+      <div>Food cells: <span id="stat-food">0</span></div>
+      <div>Avg speed: <span id="stat-speed">0</span></div>
+      <div>Avg sense: <span id="stat-sense">0</span></div>
+      <div>Avg metabolism: <span id="stat-metabolism">0</span></div>
+      <div>Avg repro threshold: <span id="stat-repro">0</span></div>
+      <div>Avg mutability: <span id="stat-mutability">0</span></div>
+    </div>
+  </div>
+
+  <script src="src/genetics.js"></script>
+  <script src="src/ant.js"></script>
+  <script src="src/world.js"></script>
+  <script src="src/renderer.js"></script>
+  <script src="src/simulation.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>
