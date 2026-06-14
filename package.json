@@ -1,0 +1,10 @@
+{
+  "name": "ant-evolution-sim",
+  "version": "1.0.0",
+  "description": "A long-running browser-based ant evolution simulation on a 1000x1000 grid.",
+  "scripts": {
+    "dev": "node scripts/dev-server.js"
+  },
+  "keywords": ["simulation", "evolution", "ants", "canvas"],
+  "license": "MIT"
+}
