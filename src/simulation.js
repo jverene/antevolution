@@ -8,14 +8,24 @@ const Simulation = (function () {
   const AntClass = Ant.Ant;
   const { createRandomGenome, cloneGenome, mutate } = Genetics;
 
-  const INITIAL_ANTS = 2000;
-  const INITIAL_FOOD_PATCHES = 30;
-  const FOOD_PATCH_RADIUS = 5;
-  const FOOD_PATCH_DENSITY = 0.35;
-  const FOOD_SPAWN_RATE = 0.02; // chance per tick to start a new patch
-  const FOOD_FLOOR_CELLS = 200; // guaranteed patch if food falls below this
-  const SCATTERED_FOOD_CELLS = 20; // random cells sprinkled with food each tick
-  const SCATTERED_FOOD_AMOUNT = 120;
+  const PARAM_RANGES = {
+    initialAnts: { min: 800, max: 4000 },
+    initialFoodPatches: { min: 12, max: 55 },
+    foodPatchRadius: { min: 4, max: 9 },
+    foodPatchDensity: { min: 0.25, max: 0.65 },
+    foodSpawnRate: { min: 0.006, max: 0.022 },
+    foodFloorCells: { min: 120, max: 350 },
+    scatteredFoodCells: { min: 12, max: 32 },
+    scatteredFoodAmount: { min: 80, max: 180 },
+  };
+
+  function randInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function randFloat(min, max) {
+    return Math.random() * (max - min) + min;
+  }
 
   class SimulationEngine {
     constructor() {
@@ -24,21 +34,34 @@ const Simulation = (function () {
       this.ticks = 0;
       this.running = true;
       this.speed = 1; // simulation ticks per animation frame
+      this.randomizeParams();
       this.reset();
+    }
+
+    randomizeParams() {
+      this.initialAnts = randInt(PARAM_RANGES.initialAnts.min, PARAM_RANGES.initialAnts.max);
+      this.initialFoodPatches = randInt(PARAM_RANGES.initialFoodPatches.min, PARAM_RANGES.initialFoodPatches.max);
+      this.foodPatchRadius = randInt(PARAM_RANGES.foodPatchRadius.min, PARAM_RANGES.foodPatchRadius.max);
+      this.foodPatchDensity = randFloat(PARAM_RANGES.foodPatchDensity.min, PARAM_RANGES.foodPatchDensity.max);
+      this.foodSpawnRate = randFloat(PARAM_RANGES.foodSpawnRate.min, PARAM_RANGES.foodSpawnRate.max);
+      this.foodFloorCells = randInt(PARAM_RANGES.foodFloorCells.min, PARAM_RANGES.foodFloorCells.max);
+      this.scatteredFoodCells = randInt(PARAM_RANGES.scatteredFoodCells.min, PARAM_RANGES.scatteredFoodCells.max);
+      this.scatteredFoodAmount = randInt(PARAM_RANGES.scatteredFoodAmount.min, PARAM_RANGES.scatteredFoodAmount.max);
     }
 
     reset() {
       this.world.reset();
       this.ants = [];
       this.ticks = 0;
+      this.randomizeParams();
 
       // Seed food.
-      for (let i = 0; i < INITIAL_FOOD_PATCHES; i++) {
+      for (let i = 0; i < this.initialFoodPatches; i++) {
         this.spawnRandomFoodPatch();
       }
 
       // Seed ants at random locations.
-      for (let i = 0; i < INITIAL_ANTS; i++) {
+      for (let i = 0; i < this.initialAnts; i++) {
         const x = Math.floor(Math.random() * WIDTH);
         const y = Math.floor(Math.random() * HEIGHT);
         if (this.world.addAnt(x, y)) {
@@ -50,14 +73,14 @@ const Simulation = (function () {
     spawnRandomFoodPatch() {
       const cx = Math.floor(Math.random() * WIDTH);
       const cy = Math.floor(Math.random() * HEIGHT);
-      this.world.spawnFoodPatch(cx, cy, FOOD_PATCH_RADIUS, FOOD_PATCH_DENSITY);
+      this.world.spawnFoodPatch(cx, cy, this.foodPatchRadius, this.foodPatchDensity);
     }
 
     spawnScatteredFood() {
-      for (let i = 0; i < SCATTERED_FOOD_CELLS; i++) {
+      for (let i = 0; i < this.scatteredFoodCells; i++) {
         const x = Math.floor(Math.random() * WIDTH);
         const y = Math.floor(Math.random() * HEIGHT);
-        this.world.addFood(x, y, SCATTERED_FOOD_AMOUNT);
+        this.world.addFood(x, y, this.scatteredFoodAmount);
       }
     }
 
@@ -77,7 +100,7 @@ const Simulation = (function () {
       this.ticks++;
 
       // Natural food spawn: patches plus scattered background crumbs.
-      if (Math.random() < FOOD_SPAWN_RATE || this.world.foodCellCount() < FOOD_FLOOR_CELLS) {
+      if (Math.random() < this.foodSpawnRate || this.world.foodCellCount() < this.foodFloorCells) {
         this.spawnRandomFoodPatch();
       }
       this.spawnScatteredFood();
@@ -227,7 +250,7 @@ const Simulation = (function () {
       const spot = candidates[Math.floor(Math.random() * candidates.length)];
       const childGenome = cloneGenome(parent.genome);
       mutate(childGenome, parent.pMutability);
-      mutate(parent.genome, parent.pMutability * 0.3);
+      mutate(parent.genome, parent.pMutability * 0.3); // parent also mutates slightly (somatic / late-life)
       parent.refresh();
 
       const child = new AntClass(spot.x, spot.y, childGenome);
@@ -248,6 +271,7 @@ const Simulation = (function () {
       }
     }
 
+    // Aggregate statistics for the UI.
     stats() {
       const ants = this.ants;
       const n = ants.length;
