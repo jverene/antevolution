@@ -4,10 +4,17 @@
  */
 
 const Renderer = (function () {
+  const { SPECIES } = World;
+
   const BROWN = 0xff325078; // ABGR little-endian for RGBA(120,80,50)
-  const GREEN = 0xff3cb432; // RGBA(50,180,60)
-  const DARK_GREEN = 0xff1e5a19; // RGBA(25,90,25)
   const BLACK = 0xff000000;
+  const BLUE = 0xffd06a35; // ABGR for RGBA(53,106,208)
+  const RED = 0xff3b4ee8; // ABGR for RGBA(232,78,59)
+
+  // Pack RGBA into a single ABGR Uint32 (little-endian).
+  function rgba(r, g, b, a = 255) {
+    return (a << 24) | (b << 16) | (g << 8) | r;
+  }
 
   class Renderer {
     constructor(canvasId, width, height) {
@@ -28,24 +35,39 @@ const Renderer = (function () {
     }
 
     /**
-     * Full render of the world. Brown background, green food, black ants.
+     * Full render of the world. Brown dirt, green plants, and colored animals.
      */
     render(world) {
       const pixels = this.pixels;
-      const food = world.food;
-      const ants = world.antCount;
+      const plantBiomass = world.plantBiomass;
+      const antCount = world.antCount;
+      const herbivoreCount = world.herbivoreCount;
+      const predatorCount = world.predatorCount;
       const area = world.area;
 
-      // 1. Brown background.
+      // 1. Brown background with subtle nutrient variation.
       pixels.fill(BROWN);
 
-      // 2. Overlay food and ants in one pass.
+      // 2. Overlay plants and organisms in one pass.
       for (let i = 0; i < area; i++) {
-        if (ants[i] > 0) {
+        const biomass = plantBiomass[i];
+        const hasPredator = predatorCount[i] > 0;
+        const hasHerbivore = herbivoreCount[i] > 0;
+        const hasAnt = antCount[i] > 0;
+
+        if (hasPredator) {
+          pixels[i] = RED;
+        } else if (hasHerbivore) {
+          pixels[i] = BLUE;
+        } else if (hasAnt) {
           pixels[i] = BLACK;
-        } else if (food[i] > 0) {
-          // Brighter green for fuller food.
-          pixels[i] = food[i] > 500 ? GREEN : DARK_GREEN;
+        } else if (biomass > 0) {
+          // Brighter, more saturated green for denser vegetation.
+          const intensity = Math.min(1, biomass / 600);
+          const r = Math.floor(25 + 25 * (1 - intensity));
+          const g = Math.floor(90 + 90 * intensity);
+          const b = Math.floor(25 + 25 * (1 - intensity));
+          pixels[i] = rgba(r, g, b);
         }
       }
 

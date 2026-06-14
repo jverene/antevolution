@@ -13,11 +13,14 @@
     speed: document.getElementById("speed"),
     statTicks: document.getElementById("stat-ticks"),
     statAnts: document.getElementById("stat-ants"),
-    statFood: document.getElementById("stat-food"),
+    statHerbivores: document.getElementById("stat-herbivores"),
+    statPredators: document.getElementById("stat-predators"),
+    statPlants: document.getElementById("stat-plants"),
     statSpeed: document.getElementById("stat-speed"),
     statSense: document.getElementById("stat-sense"),
     statMetabolism: document.getElementById("stat-metabolism"),
     statRepro: document.getElementById("stat-repro"),
+    statAggression: document.getElementById("stat-aggression"),
     statMutability: document.getElementById("stat-mutability"),
   };
 
@@ -31,11 +34,14 @@
   function renderStats(s) {
     ui.statTicks.textContent = s.ticks.toLocaleString();
     ui.statAnts.textContent = s.ants.toLocaleString();
-    ui.statFood.textContent = s.foodCells.toLocaleString();
+    ui.statHerbivores.textContent = s.herbivores.toLocaleString();
+    ui.statPredators.textContent = s.predators.toLocaleString();
+    ui.statPlants.textContent = s.plantCells.toLocaleString();
     ui.statSpeed.textContent = s.speed.toFixed(3);
     ui.statSense.textContent = s.sense.toFixed(2);
     ui.statMetabolism.textContent = s.metabolism.toFixed(3);
     ui.statRepro.textContent = s.repro.toFixed(1);
+    ui.statAggression.textContent = s.aggression.toFixed(2);
     ui.statMutability.textContent = (s.mutability * 1000).toFixed(2) + "‰";
   }
 

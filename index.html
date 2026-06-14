@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ant Evolution Simulation</title>
+  <title>Evolution Ecosystem Simulation</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <canvas id="world"></canvas>
 
   <div id="ui">
-    <h1>Ant Evolution</h1>
+    <h1>Evolution Ecosystem</h1>
     <div class="controls">
       <button id="btn-play">Pause</button>
       <button id="btn-reset">Reset</button>
@@ -22,17 +22,20 @@
     <div class="stats">
       <div>Ticks: <span id="stat-ticks">0</span></div>
       <div>Ants: <span id="stat-ants">0</span></div>
-      <div>Food cells: <span id="stat-food">0</span></div>
+      <div>Herbivores: <span id="stat-herbivores">0</span></div>
+      <div>Predators: <span id="stat-predators">0</span></div>
+      <div>Plant cells: <span id="stat-plants">0</span></div>
       <div>Avg speed: <span id="stat-speed">0</span></div>
       <div>Avg sense: <span id="stat-sense">0</span></div>
       <div>Avg metabolism: <span id="stat-metabolism">0</span></div>
       <div>Avg repro threshold: <span id="stat-repro">0</span></div>
+      <div>Avg aggression: <span id="stat-aggression">0</span></div>
       <div>Avg mutability: <span id="stat-mutability">0</span></div>
     </div>
   </div>
 
   <script src="src/genetics.js"></script>
-  <script src="src/ant.js"></script>
+  <script src="src/organism.js"></script>
   <script src="src/world.js"></script>
   <script src="src/renderer.js"></script>
   <script src="src/simulation.js"></script>
