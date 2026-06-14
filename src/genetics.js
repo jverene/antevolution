@@ -2,7 +2,7 @@
  * Genetics engine: diploid chromosomes, quantitative traits,
  * point mutation, and meiotic crossover.
  *
- * Each ant has a genome of 16 genes x 2 alleles = 32 floating-point values.
+ * Each organism has a genome of 16 genes x 2 alleles = 32 floating-point values.
  * Genes are additive (phenotype ~= allele sum) with nonlinear epistatic
  * penalties so trait combinations matter for fitness.
  */
@@ -57,13 +57,57 @@ const Genetics = (function () {
     return g;
   }
 
+  /**
+   * Create a biased starting genome for a given ecological role.
+   * The species constant is passed in from the caller (World.SPECIES).
+   */
+  function createSpeciesGenome(species) {
+    const g = createRandomGenome();
+    const setGeneMean = (gene, mean) => {
+      const i0 = gene * ALLELES_PER_GENE;
+      const i1 = i0 + 1;
+      // Shift both alleles toward the desired mean while keeping some variance.
+      g[i0] = g[i0] * 0.3 + mean * 0.7;
+      g[i1] = g[i1] * 0.3 + mean * 0.7;
+    };
+
+    if (species === 2) {
+      // Herbivore: fast, skittish, efficient grazer.
+      setGeneMean(GENE.SPEED, 1.4);
+      setGeneMean(GENE.SENSE_RANGE, 1.2);
+      setGeneMean(GENE.FOOD_EFFICIENCY, 1.4);
+      setGeneMean(GENE.WANDER_NOISE, 1.2);
+      setGeneMean(GENE.REPRO_THRESHOLD, 0.8);
+      setGeneMean(GENE.LONGEVITY, 0.6);
+      setGeneMean(GENE.AGGRESSION, -0.5);
+    } else if (species === 3) {
+      // Predator: fast, long-range senses, aggressive, costly metabolism.
+      setGeneMean(GENE.SPEED, 1.6);
+      setGeneMean(GENE.SENSE_RANGE, 1.8);
+      setGeneMean(GENE.FOOD_EFFICIENCY, 1.0);
+      setGeneMean(GENE.AGGRESSION, 1.6);
+      setGeneMean(GENE.METABOLISM_BASE, 1.2);
+      setGeneMean(GENE.REPRO_THRESHOLD, 1.4);
+      setGeneMean(GENE.LONGEVITY, 0.9);
+      setGeneMean(GENE.WANDER_NOISE, 0.7);
+    } else {
+      // Ant: balanced forager with latent social/aggressive traits.
+      setGeneMean(GENE.SPEED, 0.6);
+      setGeneMean(GENE.SENSE_RANGE, 0.8);
+      setGeneMean(GENE.FOOD_EFFICIENCY, 1.0);
+      setGeneMean(GENE.SOCIALITY, 0.6);
+      setGeneMean(GENE.AGGRESSION, 0.2);
+    }
+    return g;
+  }
+
   function cloneGenome(source) {
     return new Float64Array(source);
   }
 
   /**
    * Point mutation plus rare chromosomal-scale events.
-   * mutability is the ant's own per-allele mutation standard deviation.
+   * mutability is the organism's own per-allele mutation standard deviation.
    */
   function mutate(genome, mutability) {
     const baseRate = Math.max(0.0001, Math.min(0.5, mutability));
@@ -121,6 +165,7 @@ const Genetics = (function () {
     GENE,
     randNormal,
     createRandomGenome,
+    createSpeciesGenome,
     cloneGenome,
     mutate,
     crossover,
