@@ -49,18 +49,20 @@ The simulation is a food web with three trophic levels plus an optional advanced
 
 ## Evolution model
 
-Each organism carries a diploid genome of 24 genes × 2 alleles (48 floating-point values). Genes influence physical traits (speed, sense range, metabolism, thermal efficiency, longevity) and behavioral weights (food attraction, predator fear, aggression toward same/other species, shelter/farm attraction, exploration).
+Each organism carries a diploid genome of 24 genes × 2 alleles (48 floating-point values) plus a small neural-network weight vector. Genes influence physical traits (speed, sense range, metabolism, thermal efficiency, longevity) and behavioral weights (food attraction, predator fear, aggression toward same/other species, shelter/farm attraction, exploration).
 
 Traits are computed from allele sums plus **epistatic trade-offs**: faster movement and wider sensing increase metabolic cost, while thermal-efficiency genes reduce it. Mutations are Gaussian point mutations plus rare large-effect chromosomal events. Selection emerges from energy balance, starvation, aging, competition for space and food, predation, and biome-specific thermodynamic costs.
 
 ## Behavior system
 
-Instead of hardcoded species state machines, agents use a weighted-utility decision function:
+Agents use a **bicameral decision architecture** inspired by the idea of ancient hardwired drives modulated by a flexible control layer:
 
-- They sense nearby food, predators, same-species neighbors, other species, shelters, and farms.
-- A desired movement direction is computed as a weighted sum of these stimuli.
-- Each tick they move in the direction that best aligns with the desired vector, with a small amount of stochastic exploration.
-- Weights are encoded in the genome and evolve, so strategies such as "flee predators", "hunt prey", "seek shelter in tundra", or "farm fertile tiles" can emerge without being explicitly programmed.
+- **Hardwired drives** are encoded as evolved behavioral weights in the genome: food attraction, predator fear, aggression toward same/other species, shelter/farm attraction, and exploration.
+- **Modulatory neural net**: a tiny fixed-topology network (8 inputs, 4 hidden ReLU neurons, 7 outputs) reads sensory context and internal state, then outputs multipliers on each drive. For example, it can suppress food attraction when predators are nearby, boost shelter-seeking in cold biomes, or dial up exploration when energy is high.
+- Each tick the agent senses nearby food, predators, same-species neighbors, other species, shelters, and farms; the NN scales the drive weights; and the agent moves in the direction that best aligns with the resulting desired vector.
+- Both the base drive weights and the NN weights are inherited and evolve, so strategies such as "flee predators", "hunt prey", "seek shelter in tundra", or "farm fertile tiles" can emerge without being explicitly programmed.
+
+The NN is kept small and allocation-free so the simulation stays fast: inference is just a tight loop over typed arrays, with no dynamic topology or backpropagation.
 
 ## Biomes
 
