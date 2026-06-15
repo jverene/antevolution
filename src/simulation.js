@@ -759,6 +759,12 @@ const Simulation = (function () {
 
       let cost = ph[pOff + PH.METABOLISM];
       cost += this.world.getAmbientCost(x, y, ph[pOff + PH.THERMAL_EFF]);
+
+      // Soft density dependence: crowding raises metabolism through competition stress.
+      const localDensity = this.world.getTotalOrganisms(x, y);
+      const excess = Math.max(0, localDensity - 1);
+      cost += excess * excess * 0.04;
+
       energy[id] -= cost;
       age[id]++;
 
@@ -800,6 +806,8 @@ const Simulation = (function () {
       const py = posY[parentId];
       const sp = species[parentId];
 
+      const localDensity = this.world.getTotalOrganisms(px, py);
+
       const candidates = [];
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
@@ -811,6 +819,9 @@ const Simulation = (function () {
         }
       }
       if (candidates.length === 0) return;
+
+      // Density-dependent reproduction: crowded cells strongly suppress breeding.
+      if (localDensity > 2 && Math.random() < (localDensity - 2) * 0.35) return;
 
       const mateId = this.findMate(parentId, px, py, sp);
 
