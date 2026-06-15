@@ -218,7 +218,8 @@ const Genetics = (function () {
    */
   function mutate(genome, mutability) {
     const baseRate = Math.max(0.0001, Math.min(0.5, mutability));
-    const pointProb = 0.04 + baseRate * 0.5;
+    // Calibrate to realistic per-locus rates: ~0.3-0.6 base-genome mutations per offspring.
+    const pointProb = 0.005 + baseRate * 0.25;
 
     for (let gene = 0; gene < GENE_COUNT; gene++) {
       for (let a = 0; a < ALLELES_PER_GENE; a++) {
