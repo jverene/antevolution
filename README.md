@@ -61,6 +61,10 @@ Reproduction is sexual when a mature mate of the same species is nearby (within 
 
 Predators no longer receive a fixed energy reward per kill. Instead, they assimilate a fraction of the prey's current stored energy (40–60%, scaled by the predator's food-efficiency trait). This mirrors the ecological reality that predators convert only part of a prey item into usable energy and creates stronger selection for efficient hunters. Predators use their evolved `W_PREY` drive to actively pursue prey within their sense radius and can strike prey in adjacent cells.
 
+### Density-dependent regulation
+
+Hard per-cell caps are supplemented with soft density dependence. Organisms in crowded cells pay a quadratic metabolism penalty as competition stress, and reproduction is strongly suppressed when local density is high. This makes carrying capacity emergent rather than enforced by a fixed ceiling.
+
 ## Behavior system
 
 Agents use a **bicameral decision architecture** inspired by the idea of ancient hardwired drives modulated by a flexible control layer:
