@@ -7,7 +7,7 @@
 const Simulation = (function () {
   const { WorldGrid, WIDTH, HEIGHT, MAX_ORGANISMS_PER_CELL, SPECIES, BIOME, TILE } = World;
   const { GENOME_LENGTH, BASE_GENOME_LENGTH, PH, NN, NN_OUT, NN_INPUT, createSpeciesGenome, cloneGenome, mutate, crossover, copyMemome, createMemome, computeNNOutputs } = Genetics;
-  const { posX, posY, energy, age, species, alive, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation } = ECS;
+  const { posX, posY, energy, age, species, alive, torpor, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation } = ECS;
 
   const PARAM_RANGES = {
     initialAnts: { min: 400, max: 1600 },
@@ -159,6 +159,15 @@ const Simulation = (function () {
       for (let i = 0; i < n; i++) {
         const id = active[i];
         if (!alive[id]) continue;
+
+        // Hibernating organisms skip activity and only pay reduced metabolism.
+        if (torpor[id] > 0) {
+          this.metabolize(id);
+          if (alive[id]) {
+            torpor[id]--;
+          }
+          continue;
+        }
 
         this.decideAndMove(id);
         this.interact(id);
@@ -620,14 +629,19 @@ const Simulation = (function () {
 
       this._interactScratch = this._interactScratch || [];
       this._interactScratch.length = 0;
-      // Predators can strike prey in the same or adjacent cells.
-      this.spatial.queryRadius(x, y, 1, this._interactScratch);
+
+      const pOff = predatorId * PH.COUNT;
+      const strikeRange = Math.max(0, Math.floor(phenome[pOff + PH.STRIKE_RANGE]));
+      const predatorSpeed = phenome[pOff + PH.SPEED];
+      const predatorAggression = phenome[pOff + PH.AGGRESSION];
+      const predationSkill = phenome[pOff + PH.PREDATION_SKILL];
+
+      // Predators can strike prey within their evolvable strike radius.
+      const queryRadius = Math.max(1, strikeRange);
+      this.spatial.queryRadius(x, y, queryRadius, this._interactScratch);
 
       let preyId = -1;
       let bestScore = -Infinity;
-      const pOff = predatorId * PH.COUNT;
-      const predatorSpeed = phenome[pOff + PH.SPEED];
-      const predatorAggression = phenome[pOff + PH.AGGRESSION];
 
       for (let i = 0; i < this._interactScratch.length; i++) {
         const other = this._interactScratch[i];
@@ -638,7 +652,7 @@ const Simulation = (function () {
         const dx = this.wrapDelta(posX[other] - x, WIDTH);
         const dy = this.wrapDelta(posY[other] - y, HEIGHT);
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 1.5) continue; // Only immediate neighbors.
+        if (dist > strikeRange + 0.5) continue;
         const preySpeed = phenome[oOff + PH.SPEED];
         const preyDefense = phenome[oOff + PH.AGGRESSION] + phenome[oOff + PH.SOCIALITY] * 0.5;
         const speedAdvantage = predatorSpeed / Math.max(0.1, preySpeed);
@@ -660,7 +674,7 @@ const Simulation = (function () {
       const preyDefense = phenome[oOff + PH.AGGRESSION] + phenome[oOff + PH.SOCIALITY] * 0.5 + nearbyAllies * 0.15;
       const speedAdvantage = phenome[pOff + PH.SPEED] / Math.max(0.1, phenome[oOff + PH.SPEED]);
       const aggressionAdvantage = predatorAggression / Math.max(0.1, preyDefense + 1);
-      const catchChance = Math.min(0.9, 0.45 + speedAdvantage * 0.2 + aggressionAdvantage * 0.2);
+      const catchChance = Math.min(0.9, 0.35 + speedAdvantage * 0.2 + aggressionAdvantage * 0.2 + predationSkill * 0.15);
 
       if (Math.random() < catchChance) {
         // Realistic trophic transfer: predator gains a fraction of prey's stored energy.
@@ -765,8 +779,26 @@ const Simulation = (function () {
       const excess = Math.max(0, localDensity - 1);
       cost += excess * excess * 0.04;
 
+      const inTorpor = torpor[id] > 0;
+      const hibernationDrive = ph[pOff + PH.HIBERNATION_DRIVE];
+
+      if (inTorpor) {
+        // Torpor halves metabolism and pauses aging.
+        cost *= 0.5;
+      } else if (hibernationDrive > 0) {
+        // Enter torpor when energy is low or environmental stress is high.
+        const energyRatio = energy[id] / ph[pOff + PH.REPRO_THRESHOLD];
+        const t = this.world.getTemperature(x, y);
+        const tempStress = Math.abs(t - 0.5) * 2;
+        const stress = (1 - energyRatio) * 0.5 + tempStress * 0.35;
+        if (stress > 0.6 && Math.random() < hibernationDrive) {
+          torpor[id] = 5 + Math.floor(Math.random() * 11);
+          cost *= 0.5;
+        }
+      }
+
       energy[id] -= cost;
-      age[id]++;
+      if (!inTorpor) age[id]++;
 
       if (energy[id] <= 0 || age[id] > ph[pOff + PH.LONGEVITY]) {
         alive[id] = 0;

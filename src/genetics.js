@@ -37,9 +37,13 @@ const Genetics = (function () {
     W_EXPLORE: 21,
     W_SHELTER: 22,
     W_FARM: 23,
+    // Evolvable predation and survival traits.
+    STRIKE_RANGE: 24,
+    PREDATION_SKILL: 25,
+    HIBERNATION_DRIVE: 26,
   };
 
-  const GENE_COUNT = 24;
+  const GENE_COUNT = 27;
   const BASE_GENOME_LENGTH = GENE_COUNT * ALLELES_PER_GENE;
 
   // Bicameral modulatory network: hardwired drives + learned/evoled gain control.
@@ -103,8 +107,12 @@ const Genetics = (function () {
     W_FARM: 21,
     MEMORY: 22,
     LEARNING_RATE: 23,
+    // Evolvable predation and survival traits.
+    STRIKE_RANGE: 24,
+    PREDATION_SKILL: 25,
+    HIBERNATION_DRIVE: 26,
     // Totals.
-    COUNT: 24,
+    COUNT: 27,
   };
 
   // Gaussian random via Box-Muller.
@@ -162,6 +170,9 @@ const Genetics = (function () {
       setGeneMean(GENE.W_AGGRESSION_SAME, -0.5);
       setGeneMean(GENE.W_AGGRESSION_OTHER, -0.3);
       setGeneMean(GENE.W_EXPLORE, 0.25);
+      setGeneMean(GENE.STRIKE_RANGE, -0.5);
+      setGeneMean(GENE.PREDATION_SKILL, -0.5);
+      setGeneMean(GENE.HIBERNATION_DRIVE, 0.4);
     } else if (species === 3) {
       // Predator: fast, long-range senses, aggressive, costly metabolism.
       setGeneMean(GENE.SPEED, 1.6);
@@ -178,6 +189,9 @@ const Genetics = (function () {
       setGeneMean(GENE.W_EXPLORE, 0.15);
       setGeneMean(GENE.W_AGGRESSION_SAME, -0.5);
       setGeneMean(GENE.W_AGGRESSION_OTHER, 1.0);
+      setGeneMean(GENE.STRIKE_RANGE, 1.5);
+      setGeneMean(GENE.PREDATION_SKILL, 1.5);
+      setGeneMean(GENE.HIBERNATION_DRIVE, 0.0);
     } else if (species === 4) {
       // Advanced / proto-human: high memory, social, flexible behavior.
       setGeneMean(GENE.SPEED, 0.9);
@@ -193,6 +207,9 @@ const Genetics = (function () {
       setGeneMean(GENE.W_SHELTER, 0.3);
       setGeneMean(GENE.W_FARM, 0.3);
       setGeneMean(GENE.W_EXPLORE, 0.25);
+      setGeneMean(GENE.STRIKE_RANGE, -0.5);
+      setGeneMean(GENE.PREDATION_SKILL, -0.5);
+      setGeneMean(GENE.HIBERNATION_DRIVE, 0.2);
     } else {
       // Ant: balanced forager with latent social/aggressive traits.
       setGeneMean(GENE.SPEED, 0.6);
@@ -205,6 +222,9 @@ const Genetics = (function () {
       setGeneMean(GENE.W_AGGRESSION_SAME, -0.5);
       setGeneMean(GENE.W_AGGRESSION_OTHER, 0.0);
       setGeneMean(GENE.W_EXPLORE, 0.25);
+      setGeneMean(GENE.STRIKE_RANGE, -0.5);
+      setGeneMean(GENE.PREDATION_SKILL, -0.5);
+      setGeneMean(GENE.HIBERNATION_DRIVE, 0.1);
     }
     return g;
   }
@@ -310,6 +330,10 @@ const Genetics = (function () {
     const wShelterSum = geneSum(g, GENE.W_SHELTER);
     const wFarmSum = geneSum(g, GENE.W_FARM);
 
+    const strikeRangeSum = geneSum(g, GENE.STRIKE_RANGE);
+    const predationSkillSum = geneSum(g, GENE.PREDATION_SKILL);
+    const hibernationDriveSum = geneSum(g, GENE.HIBERNATION_DRIVE);
+
     // Species multipliers shift starting ranges.
     const speciesSpeedMult = sp === 3 ? 1.25 : sp === 2 ? 1.15 : 1.0;
     const speciesSenseMult = sp === 3 ? 1.3 : sp === 2 ? 1.1 : 1.0;
@@ -346,6 +370,11 @@ const Genetics = (function () {
 
     out[PH.MEMORY] = Math.max(0, Math.min(8, Math.floor(memSum * 2 + 2)));
     out[PH.LEARNING_RATE] = Math.max(0, Math.min(1, learnSum * 0.2));
+
+    // Evolvable predation traits.
+    out[PH.STRIKE_RANGE] = Math.max(0, Math.min(3, Math.floor(strikeRangeSum * 0.7 + 0.3)));
+    out[PH.PREDATION_SKILL] = Math.max(0, Math.min(2.0, predationSkillSum * 0.6 + 0.2));
+    out[PH.HIBERNATION_DRIVE] = Math.max(0, Math.min(1.0, hibernationDriveSum * 0.3 + 0.05));
 
     return out;
   }

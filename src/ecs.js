@@ -24,6 +24,8 @@ const ECS = (function () {
   const age = new Uint16Array(MAX_ENTITIES);
   const species = new Uint8Array(MAX_ENTITIES);
   const alive = new Uint8Array(MAX_ENTITIES);
+  // Torpor countdown: 0 = awake, >0 = hibernating for that many ticks.
+  const torpor = new Uint8Array(MAX_ENTITIES);
 
   // Flat genome / phenome / memome storage.
   const genome = new Float64Array(MAX_ENTITIES * GENOME_LENGTH);
@@ -65,6 +67,7 @@ const ECS = (function () {
     age[id] = 0;
     species[id] = sp | 0;
     alive[id] = 1;
+    torpor[id] = 0;
 
     const gOffset = id * GENOME_LENGTH;
     for (let i = 0; i < GENOME_LENGTH; i++) {
@@ -160,6 +163,7 @@ const ECS = (function () {
     }
     repId.fill(0xffff);
     repValue.fill(0);
+    torpor.fill(0);
   }
 
   return {
@@ -171,6 +175,7 @@ const ECS = (function () {
     age,
     species,
     alive,
+    torpor,
     genome,
     phenome,
     memome,
