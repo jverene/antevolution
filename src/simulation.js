@@ -6,7 +6,7 @@
 
 const Simulation = (function () {
   const { WorldGrid, WIDTH, HEIGHT, MAX_ORGANISMS_PER_CELL, SPECIES, BIOME, TILE } = World;
-  const { GENOME_LENGTH, PH, createSpeciesGenome, cloneGenome, mutate, copyMemome, createMemome } = Genetics;
+  const { GENOME_LENGTH, BASE_GENOME_LENGTH, PH, NN, NN_OUT, NN_INPUT, createSpeciesGenome, cloneGenome, mutate, copyMemome, createMemome, computeNNOutputs } = Genetics;
   const { posX, posY, energy, age, species, alive, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation } = ECS;
 
   const PARAM_RANGES = {
@@ -43,6 +43,8 @@ const Simulation = (function () {
       this.eventLog = [];
       this._senseScratch = [];
       this._interactScratch = [];
+      this._nnInputs = new Float32Array(NN.INPUTS);
+      this._nnOutputs = new Float32Array(NN.OUTPUTS);
       this.randomizeParams();
       this.reset();
     }
@@ -198,6 +200,10 @@ const Simulation = (function () {
       // Gather sensory summaries from the surrounding area.
       const senseData = this.summarizeSenses(id, x, y, sense);
 
+      // Bicameral decision: hardwired drives are modulated by a small NN.
+      this.computeNNInputs(id, senseData, x, y);
+      computeNNOutputs(genome, id * GENOME_LENGTH + BASE_GENOME_LENGTH, this._nnInputs, this._nnOutputs);
+
       // Random turn bias: occasionally ignore sensory input and move randomly.
       if (Math.random() < ph[pOff + PH.TURN_BIAS]) {
         const alt = this.randomDirection();
@@ -212,7 +218,7 @@ const Simulation = (function () {
       // Evaluate the 8 movement directions plus staying put.
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
-          const score = this.utilityScore(id, dx, dy, senseData);
+          const score = this.utilityScore(id, dx, dy, senseData, this._nnOutputs);
           if (score > bestScore) {
             bestScore = score;
             bestDx = dx;
@@ -469,9 +475,25 @@ const Simulation = (function () {
     }
 
     /**
+     * Fill the NN input vector from sensory summary and internal state.
+     */
+    computeNNInputs(id, s, x, y) {
+      const inp = this._nnInputs;
+      inp[NN_INPUT.FOOD_STRENGTH] = Math.min(1, s.foodStrength / 200);
+      inp[NN_INPUT.PREDATOR_COUNT] = Math.min(1, s.predatorCount / 3);
+      inp[NN_INPUT.SAME_COUNT] = Math.min(1, s.sameCount / 5);
+      inp[NN_INPUT.OTHER_COUNT] = Math.min(1, s.otherCount / 5);
+      inp[NN_INPUT.SHELTER_COUNT] = Math.min(1, s.shelterCount / 3);
+      inp[NN_INPUT.FARM_COUNT] = Math.min(1, s.farmCount / 3);
+      inp[NN_INPUT.ENERGY] = Math.min(1, energy[id] / 150);
+      const t = this.world.getTemperature(x, y);
+      inp[NN_INPUT.TEMP_STRESS] = Math.abs(t - 0.5) * 2;
+    }
+
+    /**
      * Compute utility of moving in direction (dx, dy).
      */
-    utilityScore(id, dx, dy, s) {
+    utilityScore(id, dx, dy, s, nn) {
       const pOff = id * PH.COUNT;
       const ph = phenome;
 
@@ -484,27 +506,28 @@ const Simulation = (function () {
       let desiredDx = 0;
       let desiredDy = 0;
 
-      desiredDx += ph[pOff + PH.W_FOOD] * s.foodDx;
-      desiredDy += ph[pOff + PH.W_FOOD] * s.foodDy;
+      const no = NN_OUT;
+      desiredDx += ph[pOff + PH.W_FOOD] * nn[no.FOOD_MULT] * s.foodDx;
+      desiredDy += ph[pOff + PH.W_FOOD] * nn[no.FOOD_MULT] * s.foodDy;
 
-      desiredDx -= ph[pOff + PH.W_FLEE_PREDATOR] * s.predatorDx;
-      desiredDy -= ph[pOff + PH.W_FLEE_PREDATOR] * s.predatorDy;
+      desiredDx -= ph[pOff + PH.W_FLEE_PREDATOR] * nn[no.FLEE_MULT] * s.predatorDx;
+      desiredDy -= ph[pOff + PH.W_FLEE_PREDATOR] * nn[no.FLEE_MULT] * s.predatorDy;
 
-      desiredDx += ph[pOff + PH.W_AGGRESSION_SAME] * s.sameDx;
-      desiredDy += ph[pOff + PH.W_AGGRESSION_SAME] * s.sameDy;
+      desiredDx += ph[pOff + PH.W_AGGRESSION_SAME] * nn[no.AGGR_SAME_MULT] * s.sameDx;
+      desiredDy += ph[pOff + PH.W_AGGRESSION_SAME] * nn[no.AGGR_SAME_MULT] * s.sameDy;
 
-      desiredDx += ph[pOff + PH.W_AGGRESSION_OTHER] * s.otherDx;
-      desiredDy += ph[pOff + PH.W_AGGRESSION_OTHER] * s.otherDy;
+      desiredDx += ph[pOff + PH.W_AGGRESSION_OTHER] * nn[no.AGGR_OTHER_MULT] * s.otherDx;
+      desiredDy += ph[pOff + PH.W_AGGRESSION_OTHER] * nn[no.AGGR_OTHER_MULT] * s.otherDy;
 
-      desiredDx += ph[pOff + PH.W_SHELTER] * s.shelterDx;
-      desiredDy += ph[pOff + PH.W_SHELTER] * s.shelterDy;
+      desiredDx += ph[pOff + PH.W_SHELTER] * nn[no.SHELTER_MULT] * s.shelterDx;
+      desiredDy += ph[pOff + PH.W_SHELTER] * nn[no.SHELTER_MULT] * s.shelterDy;
 
-      desiredDx += ph[pOff + PH.W_FARM] * s.farmDx;
-      desiredDy += ph[pOff + PH.W_FARM] * s.farmDy;
+      desiredDx += ph[pOff + PH.W_FARM] * nn[no.FARM_MULT] * s.farmDx;
+      desiredDy += ph[pOff + PH.W_FARM] * nn[no.FARM_MULT] * s.farmDy;
 
       // Score is alignment with desired direction plus exploration noise.
       let score = desiredDx * ux + desiredDy * uy;
-      score += ph[pOff + PH.W_EXPLORE] * (Math.random() - 0.5) * 0.5;
+      score += ph[pOff + PH.W_EXPLORE] * nn[no.EXPLORE_BOOST] * (Math.random() - 0.5) * 0.5;
 
       // Penalize staying still to keep agents moving.
       if (dx === 0 && dy === 0) score -= 0.5;
