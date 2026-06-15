@@ -332,8 +332,7 @@ const Genetics = (function () {
     const speedCost = out[PH.SPEED] * out[PH.SPEED] * 0.12;
     const senseCost = out[PH.SENSE_RANGE] * out[PH.SENSE_RANGE] * 0.008;
     const baseCost = Math.max(0.05, metabSum * 0.08);
-    const predatorTax = sp === 3 ? 0.03 : 0;
-    out[PH.METABOLISM] = (baseCost + speedCost + senseCost + predatorTax) / out[PH.THERMAL_EFF];
+    out[PH.METABOLISM] = (baseCost + speedCost + senseCost) / out[PH.THERMAL_EFF];
 
     // Behavior weights are allowed to be negative (repulsion) or positive.
     out[PH.W_FOOD] = wFoodSum;

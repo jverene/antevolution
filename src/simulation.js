@@ -507,8 +507,11 @@ const Simulation = (function () {
       let desiredDy = 0;
 
       const no = NN_OUT;
-      desiredDx += ph[pOff + PH.W_FOOD] * nn[no.FOOD_MULT] * s.foodDx;
-      desiredDy += ph[pOff + PH.W_FOOD] * nn[no.FOOD_MULT] * s.foodDy;
+      const sp = species[id];
+      // For predators the "food" stimulus is prey, so they use W_PREY instead of W_FOOD.
+      const foodWeight = sp === SPECIES.PREDATOR ? ph[pOff + PH.W_PREY] : ph[pOff + PH.W_FOOD];
+      desiredDx += foodWeight * nn[no.FOOD_MULT] * s.foodDx;
+      desiredDy += foodWeight * nn[no.FOOD_MULT] * s.foodDy;
 
       desiredDx -= ph[pOff + PH.W_FLEE_PREDATOR] * nn[no.FLEE_MULT] * s.predatorDx;
       desiredDy -= ph[pOff + PH.W_FLEE_PREDATOR] * nn[no.FLEE_MULT] * s.predatorDy;
@@ -617,7 +620,8 @@ const Simulation = (function () {
 
       this._interactScratch = this._interactScratch || [];
       this._interactScratch.length = 0;
-      this.spatial.queryCell(x, y, this._interactScratch);
+      // Predators can strike prey in the same or adjacent cells.
+      this.spatial.queryRadius(x, y, 1, this._interactScratch);
 
       let preyId = -1;
       let bestScore = -Infinity;
@@ -631,11 +635,16 @@ const Simulation = (function () {
         const osp = species[other];
         if (osp === SPECIES.PREDATOR || osp === SPECIES.NONE) continue;
         const oOff = other * PH.COUNT;
+        const dx = this.wrapDelta(posX[other] - x, WIDTH);
+        const dy = this.wrapDelta(posY[other] - y, HEIGHT);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 1.5) continue; // Only immediate neighbors.
         const preySpeed = phenome[oOff + PH.SPEED];
         const preyDefense = phenome[oOff + PH.AGGRESSION] + phenome[oOff + PH.SOCIALITY] * 0.5;
         const speedAdvantage = predatorSpeed / Math.max(0.1, preySpeed);
         const energyValue = osp === SPECIES.HERBIVORE ? 1.5 : 1.0;
-        const score = speedAdvantage * 2 - preyDefense + energyValue + Math.random();
+        // Prefer closer, slower, more valuable prey.
+        const score = speedAdvantage * 2 - preyDefense + energyValue - dist * 0.5 + Math.random();
         if (score > bestScore) {
           bestScore = score;
           preyId = other;
@@ -645,14 +654,22 @@ const Simulation = (function () {
       if (preyId < 0) return 0;
 
       const oOff = preyId * PH.COUNT;
-      const nearbyAllies = this.world.getOrganismCount(x, y, species[preyId]) - 1;
+      const preyX = posX[preyId];
+      const preyY = posY[preyId];
+      const nearbyAllies = this.world.getOrganismCount(preyX, preyY, species[preyId]) - 1;
       const preyDefense = phenome[oOff + PH.AGGRESSION] + phenome[oOff + PH.SOCIALITY] * 0.5 + nearbyAllies * 0.15;
       const speedAdvantage = phenome[pOff + PH.SPEED] / Math.max(0.1, phenome[oOff + PH.SPEED]);
       const aggressionAdvantage = predatorAggression / Math.max(0.1, preyDefense + 1);
-      const catchChance = Math.min(0.9, 0.35 + speedAdvantage * 0.2 + aggressionAdvantage * 0.2);
+      const catchChance = Math.min(0.9, 0.45 + speedAdvantage * 0.2 + aggressionAdvantage * 0.2);
 
       if (Math.random() < catchChance) {
-        const energyGain = 40 * phenome[pOff + PH.FOOD_EFFICIENCY];
+        // Realistic trophic transfer: predator gains a fraction of prey's stored energy.
+        // The classic ecological rule is ~10% net efficiency over whole trophic levels,
+        // but assimilation of a single prey item is higher; we use 40-60% scaled by food efficiency.
+        const preyEnergy = energy[preyId];
+        const foodEff = phenome[pOff + PH.FOOD_EFFICIENCY];
+        const transferFraction = Math.min(0.65, 0.4 + 0.05 * foodEff);
+        const energyGain = preyEnergy * transferFraction;
         alive[preyId] = 0;
         this.world.removeOrganism(posX[preyId], posY[preyId], species[preyId]);
         return energyGain;
