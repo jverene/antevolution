@@ -6,7 +6,7 @@
 
 const Simulation = (function () {
   const { WorldGrid, WIDTH, HEIGHT, MAX_ORGANISMS_PER_CELL, SPECIES, BIOME, TILE } = World;
-  const { GENOME_LENGTH, BASE_GENOME_LENGTH, PH, NN, NN_OUT, NN_INPUT, createSpeciesGenome, cloneGenome, mutate, copyMemome, createMemome, computeNNOutputs } = Genetics;
+  const { GENOME_LENGTH, BASE_GENOME_LENGTH, PH, NN, NN_OUT, NN_INPUT, createSpeciesGenome, cloneGenome, mutate, crossover, copyMemome, createMemome, computeNNOutputs } = Genetics;
   const { posX, posY, energy, age, species, alive, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation } = ECS;
 
   const PARAM_RANGES = {
@@ -751,6 +751,33 @@ const Simulation = (function () {
       }
     }
 
+    /**
+     * Find a nearby mature mate of the same species for sexual reproduction.
+     * Returns the mate's entity id, or -1 if none is available.
+     */
+    findMate(parentId, x, y, sp) {
+      this._interactScratch = this._interactScratch || [];
+      this._interactScratch.length = 0;
+      this.spatial.queryRadius(x, y, 2, this._interactScratch);
+
+      let mateId = -1;
+      let mateCount = 0;
+      for (let i = 0; i < this._interactScratch.length; i++) {
+        const other = this._interactScratch[i];
+        if (other === parentId || !alive[other]) continue;
+        if (species[other] !== sp) continue;
+        // Mate must be mature and have enough energy to be considered fertile.
+        const oOff = other * PH.COUNT;
+        if (age[other] < 20 || energy[other] < phenome[oOff + PH.REPRO_THRESHOLD] * 0.4) continue;
+        mateCount++;
+        // Reservoir sampling so we don't need a second pass.
+        if (Math.random() < 1 / mateCount) {
+          mateId = other;
+        }
+      }
+      return mateId;
+    }
+
     tryReproduce(parentId) {
       const px = posX[parentId];
       const py = posY[parentId];
@@ -768,13 +795,24 @@ const Simulation = (function () {
       }
       if (candidates.length === 0) return;
 
+      const mateId = this.findMate(parentId, px, py, sp);
+
       const spot = candidates[Math.floor(Math.random() * candidates.length)];
       if (!this.world.addOrganism(spot.x, spot.y, sp)) return;
 
-      const childGenome = cloneGenome(genome.subarray(parentId * GENOME_LENGTH, (parentId + 1) * GENOME_LENGTH));
+      const parentGenome = genome.subarray(parentId * GENOME_LENGTH, (parentId + 1) * GENOME_LENGTH);
+      const childGenome = cloneGenome(parentGenome);
       const pMut = phenome[parentId * PH.COUNT + PH.MUTABILITY];
+
+      if (mateId >= 0) {
+        // Sexual reproduction: meiotic crossover with a nearby mate.
+        const mateGenome = genome.subarray(mateId * GENOME_LENGTH, (mateId + 1) * GENOME_LENGTH);
+        crossover(parentGenome, mateGenome, childGenome);
+      }
+      // If no mate is available, fall back to asexual cloning (apomixis).
+
       mutate(childGenome, pMut);
-      mutate(genome.subarray(parentId * GENOME_LENGTH, (parentId + 1) * GENOME_LENGTH), pMut * 0.3);
+      mutate(parentGenome, pMut * 0.3);
       refreshPhenome(parentId);
 
       const childId = create(spot.x, spot.y, sp, 25, childGenome);
