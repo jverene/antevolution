@@ -65,6 +65,16 @@ Predators no longer receive a fixed energy reward per kill. Instead, they assimi
 
 Hard per-cell caps are supplemented with soft density dependence. Organisms in crowded cells pay a quadratic metabolism penalty as competition stress, and reproduction is strongly suppressed when local density is high. This makes carrying capacity emergent rather than enforced by a fixed ceiling.
 
+### Evolvable survival traits
+
+The genome has expanded beyond basic physiology and behavior weights to include evolvable survival specializations:
+
+- **Strike range** — how far a predator can reach to catch prey (0–3 cells).
+- **Predation skill** — a bonus to a predator's catch chance.
+- **Hibernation drive** — the tendency to enter torpor when energy is low or temperature stress is high. Hibernating organisms skip movement and interaction, pay halved metabolism, and do not age.
+
+These traits are inherited, recombined sexually, and mutate, so lineages can evolve toward specialist hunters, efficient grazers, or hardy hibernators depending on the biome and ecological pressures.
+
 ## Behavior system
 
 Agents use a **bicameral decision architecture** inspired by the idea of ancient hardwired drives modulated by a flexible control layer:
