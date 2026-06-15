@@ -40,7 +40,37 @@ const Genetics = (function () {
   };
 
   const GENE_COUNT = 24;
-  const GENOME_LENGTH = GENE_COUNT * ALLELES_PER_GENE;
+  const BASE_GENOME_LENGTH = GENE_COUNT * ALLELES_PER_GENE;
+
+  // Bicameral modulatory network: hardwired drives + learned/evoled gain control.
+  // The NN takes sensory/context inputs and outputs multipliers on the base drives.
+  const NN = {
+    INPUTS: 8,
+    HIDDEN: 4,
+    OUTPUTS: 7,
+  };
+  const NN_OUT = {
+    FOOD_MULT: 0,
+    FLEE_MULT: 1,
+    AGGR_SAME_MULT: 2,
+    AGGR_OTHER_MULT: 3,
+    SHELTER_MULT: 4,
+    FARM_MULT: 5,
+    EXPLORE_BOOST: 6,
+  };
+  const NN_INPUT = {
+    FOOD_STRENGTH: 0,
+    PREDATOR_COUNT: 1,
+    SAME_COUNT: 2,
+    OTHER_COUNT: 3,
+    SHELTER_COUNT: 4,
+    FARM_COUNT: 5,
+    ENERGY: 6,
+    TEMP_STRESS: 7,
+  };
+  const NN_WEIGHT_COUNT =
+    NN.INPUTS * NN.HIDDEN + NN.HIDDEN + NN.HIDDEN * NN.OUTPUTS + NN.OUTPUTS;
+  const GENOME_LENGTH = BASE_GENOME_LENGTH + NN_WEIGHT_COUNT;
 
   // Cultural / meme vector length. Not inherited genetically; transmitted horizontally.
   const MEMOME_LENGTH = 8;
@@ -96,8 +126,12 @@ const Genetics = (function () {
 
   function createRandomGenome() {
     const g = new Float64Array(GENOME_LENGTH);
-    for (let i = 0; i < GENOME_LENGTH; i++) {
+    for (let i = 0; i < BASE_GENOME_LENGTH; i++) {
       g[i] = randNormal(0.5, 0.25);
+    }
+    // Initialize NN weights near zero so outputs start near neutral (multiplier ~1.0).
+    for (let i = BASE_GENOME_LENGTH; i < GENOME_LENGTH; i++) {
+      g[i] = randNormal(0, 0.08);
     }
     return g;
   }
@@ -196,6 +230,15 @@ const Genetics = (function () {
       }
     }
 
+    // NN weights mutate at a low per-weight rate (many more parameters than base genes).
+    const nnRate = 0.008 + baseRate * 0.25;
+    const nnStd = 0.04 + baseRate * 0.15;
+    for (let i = BASE_GENOME_LENGTH; i < GENOME_LENGTH; i++) {
+      if (Math.random() < nnRate) {
+        genome[i] += randNormal(0, nnStd);
+      }
+    }
+
     if (Math.random() < 0.005 * baseRate) {
       const gene = Math.floor(Math.random() * GENE_COUNT);
       const idx = gene * ALLELES_PER_GENE + Math.floor(Math.random() * 2);
@@ -217,6 +260,10 @@ const Genetics = (function () {
         child[i0] = parentB[i0];
         child[i1] = parentA[i1];
       }
+    }
+    // NN weights: uniform crossover per weight.
+    for (let i = BASE_GENOME_LENGTH; i < GENOME_LENGTH; i++) {
+      child[i] = Math.random() < 0.5 ? parentA[i] : parentB[i];
     }
   }
 
@@ -304,6 +351,53 @@ const Genetics = (function () {
   }
 
   /**
+   * Run the bicameral modulatory network.
+   * genome:       full Float64Array genome storage.
+   * weightOffset: index where the NN weights begin for this organism.
+   * inputs:       Float32Array/Array of length NN.INPUTS.
+   * out:          Float32Array/Array of length NN.OUTPUTS.
+   *
+   * Outputs are multipliers centered around 1.0, clamped to [0.2, 2.0].
+   */
+  function computeNNOutputs(genome, weightOffset, inputs, out) {
+    let w = weightOffset;
+    let h0 = 0,
+      h1 = 0,
+      h2 = 0,
+      h3 = 0;
+
+    // Input -> hidden.
+    for (let i = 0; i < NN.INPUTS; i++) {
+      const v = inputs[i];
+      h0 += v * genome[w++];
+      h1 += v * genome[w++];
+      h2 += v * genome[w++];
+      h3 += v * genome[w++];
+    }
+
+    // Hidden bias + ReLU.
+    h0 = h0 + genome[w++];
+    h1 = h1 + genome[w++];
+    h2 = h2 + genome[w++];
+    h3 = h3 + genome[w++];
+    if (h0 < 0) h0 = 0;
+    if (h1 < 0) h1 = 0;
+    if (h2 < 0) h2 = 0;
+    if (h3 < 0) h3 = 0;
+
+    // Hidden -> output. Each output is a multiplier around 1.0.
+    for (let o = 0; o < NN.OUTPUTS; o++) {
+      let sum = genome[w++]; // output bias
+      sum += h0 * genome[w++];
+      sum += h1 * genome[w++];
+      sum += h2 * genome[w++];
+      sum += h3 * genome[w++];
+      const mult = 1.0 + 0.5 * sum;
+      out[o] = mult < 0.2 ? 0.2 : mult > 2.0 ? 2.0 : mult;
+    }
+  }
+
+  /**
    * Create a fresh memome vector (all zeros = no cultural knowledge).
    */
   function createMemome() {
@@ -328,8 +422,13 @@ const Genetics = (function () {
   return {
     GENE_COUNT,
     ALLELES_PER_GENE,
+    BASE_GENOME_LENGTH,
     GENOME_LENGTH,
     GENE,
+    NN,
+    NN_OUT,
+    NN_INPUT,
+    NN_WEIGHT_COUNT,
     MEMOME_LENGTH,
     PH,
     randNormal,
@@ -340,6 +439,7 @@ const Genetics = (function () {
     crossover,
     geneSum,
     computePhenome,
+    computeNNOutputs,
     createMemome,
     copyMemome,
   };
