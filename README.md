@@ -57,6 +57,10 @@ Traits are computed from allele sums plus **epistatic trade-offs**: faster movem
 
 Reproduction is sexual when a mature mate of the same species is nearby (within 2 cells). The child genome is created by meiotic crossover: for each gene it receives one allele from each parent, and the NN weights are uniformly recombined. If no mate is available, the parent falls back to asexual cloning. This mirrors many real organisms that reproduce sexually when partners are abundant and asexually when isolated.
 
+### Trophic energy transfer
+
+Predators no longer receive a fixed energy reward per kill. Instead, they assimilate a fraction of the prey's current stored energy (40–60%, scaled by the predator's food-efficiency trait). This mirrors the ecological reality that predators convert only part of a prey item into usable energy and creates stronger selection for efficient hunters. Predators use their evolved `W_PREY` drive to actively pursue prey within their sense radius and can strike prey in adjacent cells.
+
 ## Behavior system
 
 Agents use a **bicameral decision architecture** inspired by the idea of ancient hardwired drives modulated by a flexible control layer:
