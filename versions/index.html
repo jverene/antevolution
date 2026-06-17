@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Evolution Sim — Version History</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background: #0f172a;
+      color: #e2e8f0;
+    }
+    h1 { color: #38bdf8; }
+    p { line-height: 1.6; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid #334155;
+    }
+    th { color: #94a3b8; }
+    a.run {
+      display: inline-block;
+      padding: 6px 12px;
+      background: #0ea5e9;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 0.875rem;
+    }
+    a.run:hover { background: #0284c7; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #a5f3fc;
+    }
+  </style>
+</head>
+<body>
+  <h1>Evolution Simulation — Version History</h1>
+  <p>
+    Each row is a commit from the project history. Click <strong>Run this version</strong>
+    to open the simulation exactly as it was at that point in time.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Commit</th>
+        <th>Date</th>
+        <th>Message</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td><code>ed1f2b7</code></td>
+          <td>2026-06-14, 11:21:46 p.m.</td>
+          <td>Document evolvable survival traits</td>
+          <td><a class="run" href="ed1f2b74720200984c83131529f2f74042e59653/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>b318068</code></td>
+          <td>2026-06-14, 11:21:42 p.m.</td>
+          <td>Add evolvable survival traits: strike range, predation skill, and hibernation</td>
+          <td><a class="run" href="b3180689ebf2975b58d6bb7ea09cc79ea492b9d9/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>6e523f9</code></td>
+          <td>2026-06-14, 10:42:48 p.m.</td>
+          <td>Document density-dependent regulation</td>
+          <td><a class="run" href="6e523f9c0a49483556502456806dd58405a395f9/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>16ddff9</code></td>
+          <td>2026-06-14, 10:42:44 p.m.</td>
+          <td>Implement soft density-dependent regulation</td>
+          <td><a class="run" href="16ddff953458226ba6d139bbc8c9eef8021d6756/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>895c926</code></td>
+          <td>2026-06-14, 10:26:04 p.m.</td>
+          <td>Document trophic energy transfer and predator hunting</td>
+          <td><a class="run" href="895c926b5dab5234fb26705561877e109074bfeb/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>01619f9</code></td>
+          <td>2026-06-14, 10:26:00 p.m.</td>
+          <td>Implement realistic trophic transfer and active predation behavior</td>
+          <td><a class="run" href="01619f96de4c4b8707abba41b6a0f15327d25c70/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>9e566cf</code></td>
+          <td>2026-06-14, 10:12:38 p.m.</td>
+          <td>Reduce base-gene mutation rate to realistic per-locus levels</td>
+          <td><a class="run" href="9e566cf80677c9dac5ebd06ef90f35b5009887e1/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>5af96d9</code></td>
+          <td>2026-06-14, 10:08:12 p.m.</td>
+          <td>Document sexual reproduction model</td>
+          <td><a class="run" href="5af96d922e667781e57911f626a7d86b67affab8/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>437ce7f</code></td>
+          <td>2026-06-14, 10:08:09 p.m.</td>
+          <td>Implement sexual reproduction with nearby mate crossover</td>
+          <td><a class="run" href="437ce7f4db09f88fa3a1201cbf50f8bd29a48298/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>6edde2d</code></td>
+          <td>2026-06-14, 9:59:32 p.m.</td>
+          <td>Document bicameral NN behavior model</td>
+          <td><a class="run" href="6edde2d569aa1c02de4e6fabb927b3f95da7f0df/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>d76aff5</code></td>
+          <td>2026-06-14, 9:59:29 p.m.</td>
+          <td>Wire NN drive modulation into movement decisions</td>
+          <td><a class="run" href="d76aff5393105eee58b1f57edf71ba9fe26b2010/index.html">Run this version</a></td>
+        </tr>
+        <tr>
+          <td><code>9a5d5db</code></td>
+          <td>2026-06-14, 9:59:25 p.m.</td>
+          <td>Add bicameral modulatory neural network to genome</td>
+          <td><a class="run" href="9a5d5dbc588c09db80b12eaf893d0acee783bd45/index.html">Run this version</a></td>
+        </tr>
+    </tbody>
+  </table>
+</body>
+</html>
