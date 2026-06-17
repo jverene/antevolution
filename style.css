@@ -85,3 +85,17 @@ html, body {
   font-variant-numeric: tabular-nums;
   color: #f5c06a;
 }
+
+.version-link {
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.version-link a {
+  color: #7dd3fc;
+  text-decoration: none;
+}
+
+.version-link a:hover {
+  text-decoration: underline;
+}

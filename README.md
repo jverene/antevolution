@@ -37,6 +37,17 @@ PORT=3000 npm run dev
 - **Pause / Play** — freeze or resume the simulation.
 - **Reset** — restart with a fresh random world.
 - **Speed** — run multiple simulation ticks per animation frame.
+- **View older versions** — click the link in the UI to open a gallery of prior commits and run the simulation exactly as it was at each point in history.
+
+## Version history gallery
+
+The `versions/` directory contains a static snapshot of the simulation source for each of the last 12 commits. The `scripts/build-versions.js` tool regenerates this gallery from `git log`, and `versions/index.html` provides a menu where you can open and run any historical iteration.
+
+To refresh the gallery after new commits:
+
+```bash
+npm run build-versions
+```
 
 ## Ecosystem
 
