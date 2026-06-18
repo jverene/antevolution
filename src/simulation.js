@@ -49,6 +49,10 @@ const Simulation = (function () {
       this.reset();
     }
 
+    getHistory() {
+      return this.history;
+    }
+
     randomizeParams() {
       this.initialAnts = randInt(PARAM_RANGES.initialAnts.min, PARAM_RANGES.initialAnts.max);
       this.initialHerbivores = randInt(PARAM_RANGES.initialHerbivores.min, PARAM_RANGES.initialHerbivores.max);
@@ -73,6 +77,15 @@ const Simulation = (function () {
       this.noiseSeed = Math.floor(Math.random() * 1000000);
       this.randomizeParams();
 
+      // Reset population history for the new world.
+      this.history = {
+        ticks: [],
+        ants: [],
+        herbivores: [],
+        predators: [],
+        advanced: [],
+        plants: [],
+      };
       this.world.generateBiomes(this.noiseSeed);
       this.world.seedNutrients(this.nutrientSeedDensity, this.nutrientSeedMin, this.nutrientSeedMax);
 
@@ -182,6 +195,26 @@ const Simulation = (function () {
 
       cleanup();
       this.spatial.rebuild();
+
+      // Record population history every 10 ticks.
+      if (this.ticks % 10 === 0) {
+        const s = this.stats();
+        this.history.ticks.push(this.ticks);
+        this.history.ants.push(s.ants);
+        this.history.herbivores.push(s.herbivores);
+        this.history.predators.push(s.predators);
+        this.history.advanced.push(s.advanced);
+        this.history.plants.push(s.plantCells);
+        // Keep last 300 data points (3000 ticks of history).
+        if (this.history.ticks.length > 300) {
+          this.history.ticks.shift();
+          this.history.ants.shift();
+          this.history.herbivores.shift();
+          this.history.predators.shift();
+          this.history.advanced.shift();
+          this.history.plants.shift();
+        }
+      }
     }
 
     shuffleActive() {

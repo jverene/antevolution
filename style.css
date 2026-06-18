@@ -99,3 +99,18 @@ html, body {
 .version-link a:hover {
   text-decoration: underline;
 }
+
+.chart-container {
+  width: 100%;
+  height: 140px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.chart-container canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

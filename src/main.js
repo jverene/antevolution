@@ -5,6 +5,7 @@
 (function () {
   const sim = new Simulation.SimulationEngine();
   const renderer = new Renderer.Renderer("world", World.WIDTH, World.HEIGHT);
+  const chart = new Chart.PopulationChart("population-chart");
   renderer.resizeToWindow();
 
   const ui = {
@@ -81,6 +82,11 @@
       lastStatUpdate = sim.ticks;
     }
 
+    // Render population chart every 30 ticks (~0.5s at 60fps).
+    if (sim.ticks % 30 === 0) {
+      chart.render(sim.getHistory());
+    }
+
     animationId = requestAnimationFrame(frame);
   }
 
@@ -101,6 +107,7 @@
 
   window.addEventListener("resize", () => {
     renderer.resizeToWindow();
+    chart.resize();
   });
 
   updateUI();
