@@ -1014,6 +1014,27 @@ const Simulation = (function () {
       });
     }
 
+    /// Inspect a single cell and return its state.
+    inspectCell(x, y) {
+      const wx = ((x % this.world.width) + this.world.width) % this.world.width;
+      const wy = ((y % this.world.height) + this.world.height) % this.world.height;
+      const idx = wy * this.world.width + wx;
+      return {
+        x: wx,
+        y: wy,
+        biome: this.world.biome[idx],
+        temperature: this.world.temperature[idx],
+        moisture: this.world.moisture[idx],
+        plantBiomass: this.world.plantBiomass[idx],
+        nutrients: this.world.nutrients[idx],
+        tileType: this.world.tileType[idx],
+        antCount: this.world.antCount[idx],
+        herbivoreCount: this.world.herbivoreCount[idx],
+        predatorCount: this.world.predatorCount[idx],
+        advancedCount: this.world.advancedCount[idx],
+      };
+    }
+
     /// Import a world state from a JSON string.
     importState(json) {
       try {

@@ -123,3 +123,68 @@ html, body {
   height: 100%;
   display: block;
 }
+
+.inspect-panel {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.85);
+  color: #f0f0f0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  min-width: 180px;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 10;
+}
+
+.inspect-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 6px;
+}
+
+.inspect-coords {
+  font-weight: 600;
+  color: #f5c06a;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspect-close {
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.inspect-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.inspect-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inspect-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.inspect-value {
+  font-variant-numeric: tabular-nums;
+  color: #f0f0f0;
+}
+
+.inspect-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 6px 0;
+}

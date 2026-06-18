@@ -6,6 +6,7 @@
   const sim = new Simulation.SimulationEngine();
   const renderer = new Renderer.Renderer("world", World.WIDTH, World.HEIGHT);
   const chart = new Chart.PopulationChart("population-chart");
+  const inspect = new InspectPanel.Panel();
   renderer.resizeToWindow();
 
   const ui = {
@@ -143,6 +144,17 @@
   window.addEventListener("resize", () => {
     renderer.resizeToWindow();
     chart.resize();
+  });
+
+  // Click to inspect a cell.
+  renderer.canvas.addEventListener("click", (e) => {
+    const rect = renderer.canvas.getBoundingClientRect();
+    const scaleX = World.WIDTH / rect.width;
+    const scaleY = World.HEIGHT / rect.height;
+    const x = Math.floor((e.clientX - rect.left) * scaleX);
+    const y = Math.floor((e.clientY - rect.top) * scaleY);
+    const data = sim.inspectCell(x, y);
+    inspect.show(e.clientX, e.clientY, data);
   });
 
   updateUI();
