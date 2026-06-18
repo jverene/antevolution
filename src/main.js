@@ -11,6 +11,9 @@
   const ui = {
     btnPlay: document.getElementById("btn-play"),
     btnReset: document.getElementById("btn-reset"),
+    btnSave: document.getElementById("btn-save"),
+    btnLoad: document.getElementById("btn-load"),
+    fileInput: document.getElementById("file-input"),
     speed: document.getElementById("speed"),
     statTicks: document.getElementById("stat-ticks"),
     statAnts: document.getElementById("stat-ants"),
@@ -99,6 +102,38 @@
     sim.reset();
     lastStatUpdate = 0;
     renderStats(sim.stats());
+  });
+
+  ui.btnSave.addEventListener("click", () => {
+    const json = sim.exportState();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `evolution-world-${sim.ticks}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  ui.btnLoad.addEventListener("click", () => {
+    ui.fileInput.click();
+  });
+
+  ui.fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const success = sim.importState(event.target.result);
+      if (success) {
+        lastStatUpdate = 0;
+        renderStats(sim.stats());
+      } else {
+        alert("Failed to load world state.");
+      }
+    };
+    reader.readAsText(file);
+    ui.fileInput.value = "";
   });
 
   ui.speed.addEventListener("input", () => {

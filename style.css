@@ -61,6 +61,15 @@ html, body {
   background: #f5c06a;
 }
 
+.controls button.secondary {
+  background: rgba(232, 168, 75, 0.3);
+  color: #f5c06a;
+}
+
+.controls button.secondary:hover {
+  background: rgba(232, 168, 75, 0.5);
+}
+
 .controls label {
   font-size: 12px;
   display: flex;

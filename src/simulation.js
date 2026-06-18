@@ -976,6 +976,95 @@ const Simulation = (function () {
         eventLog: this.eventLog.slice(-5),
       };
     }
+
+    /// Export the current world state to a JSON string.
+    exportState() {
+      const entities = [];
+      const n = ECS.activeCount;
+      for (let i = 0; i < n; i++) {
+        const id = active[i];
+        const gOff = id * GENOME_LENGTH;
+        const mOff = id * Genetics.MEMOME_LENGTH;
+        entities.push({
+          x: posX[id],
+          y: posY[id],
+          species: species[id],
+          energy: energy[id],
+          age: age[id],
+          genome: Array.from(genome.subarray(gOff, gOff + GENOME_LENGTH)),
+          memome: Array.from(memome.subarray(mOff, mOff + Genetics.MEMOME_LENGTH)),
+          isUserPositioned: false, // Not applicable in evolution, but for completeness
+        });
+      }
+
+      return JSON.stringify({
+        version: 1,
+        ticks: this.ticks,
+        noiseSeed: this.noiseSeed,
+        params: {
+          initialAnts: this.initialAnts,
+          initialHerbivores: this.initialHerbivores,
+          initialPredators: this.initialPredators,
+          initialAdvanced: this.initialAdvanced,
+        },
+        world: this.world.exportGrid(),
+        entities,
+        history: this.history,
+        eventLog: this.eventLog,
+      });
+    }
+
+    /// Import a world state from a JSON string.
+    importState(json) {
+      try {
+        const data = JSON.parse(json);
+        if (data.version !== 1) return false;
+
+        ECS.reset();
+        this.world.reset();
+        this.spatial.clear();
+        this.ticks = data.ticks || 0;
+        this.eventLog = data.eventLog || [];
+        this.history = data.history || {
+          ticks: [], ants: [], herbivores: [], predators: [], advanced: [], plants: [],
+        };
+        this.noiseSeed = data.noiseSeed || Math.floor(Math.random() * 1000000);
+
+        if (data.params) {
+          this.initialAnts = data.params.initialAnts || 800;
+          this.initialHerbivores = data.params.initialHerbivores || 800;
+          this.initialPredators = data.params.initialPredators || 200;
+          this.initialAdvanced = data.params.initialAdvanced || 100;
+        }
+
+        if (data.world) {
+          this.world.importGrid(data.world);
+        } else {
+          this.world.generateBiomes(this.noiseSeed);
+        }
+
+        for (const e of data.entities) {
+          const sp = e.species;
+          const g = new Float32Array(e.genome);
+          const id = create(e.x, e.y, sp, e.energy, g);
+          if (id >= 0) {
+            age[id] = e.age || 0;
+            const mOff = id * Genetics.MEMOME_LENGTH;
+            const eMemome = e.memome || [];
+            for (let i = 0; i < Math.min(eMemome.length, Genetics.MEMOME_LENGTH); i++) {
+              memome[mOff + i] = eMemome[i];
+            }
+            this.world.addOrganism(e.x, e.y, sp);
+          }
+        }
+
+        this.spatial.rebuild();
+        return true;
+      } catch (err) {
+        console.error("Failed to import world state:", err);
+        return false;
+      }
+    }
   }
 
   return { SimulationEngine };

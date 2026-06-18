@@ -14,6 +14,8 @@
     <div class="controls">
       <button id="btn-play">Pause</button>
       <button id="btn-reset">Reset</button>
+      <button id="btn-save" class="secondary">Save</button>
+      <button id="btn-load" class="secondary">Load</button>
       <label>
         Speed
         <input id="speed" type="range" min="1" max="20" value="1" />
@@ -22,6 +24,7 @@
     <div class="version-link">
       <a href="versions/index.html" target="_blank">View older versions</a>
     </div>
+    <input id="file-input" type="file" accept=".json" style="display:none" />
     <div class="chart-container">
       <canvas id="population-chart"></canvas>
     </div>

@@ -376,6 +376,46 @@ const World = (function () {
       return sum;
     }
 
+    /// Export the grid state as a compact JSON-serializable object.
+    exportGrid() {
+      return {
+        width: this.width,
+        height: this.height,
+        plantBiomass: Array.from(this.plantBiomass),
+        nutrients: Array.from(this.nutrients),
+        biome: Array.from(this.biome),
+        temperature: Array.from(this.temperature),
+        moisture: Array.from(this.moisture),
+        tileType: Array.from(this.tileType),
+        tileIntegrity: Array.from(this.tileIntegrity),
+      };
+    }
+
+    /// Import grid state from a JSON-serializable object.
+    importGrid(data) {
+      if (!data) return;
+      const area = Math.min(this.area, data.plantBiomass?.length || 0);
+      for (let i = 0; i < area; i++) {
+        this.plantBiomass[i] = data.plantBiomass[i] || 0;
+        this.nutrients[i] = data.nutrients[i] || 0;
+        this.biome[i] = data.biome[i] || BIOME.GRASSLAND;
+        this.temperature[i] = data.temperature[i] || 0.5;
+        this.moisture[i] = data.moisture[i] || 0.5;
+        this.tileType[i] = data.tileType[i] || TILE.NORMAL;
+        this.tileIntegrity[i] = data.tileIntegrity[i] || 0;
+      }
+      // Recompute growth multipliers after importing biome data.
+      this.growthMultiplier.fill(1);
+      for (let i = 0; i < area; i++) {
+        const b = this.biome[i];
+        if (b === BIOME.DESERT) this.growthMultiplier[i] = 0.4;
+        else if (b === BIOME.TUNDRA) this.growthMultiplier[i] = 0.6;
+        else if (b === BIOME.GRASSLAND) this.growthMultiplier[i] = 1.0;
+        else if (b === BIOME.FOREST) this.growthMultiplier[i] = 1.2;
+        else if (b === BIOME.JUNGLE) this.growthMultiplier[i] = 1.5;
+      }
+    }
+
     reset() {
       this.plantBiomass.fill(0);
       this.nutrients.fill(0);
