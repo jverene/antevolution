@@ -124,6 +124,77 @@ html, body {
   display: block;
 }
 
+.diversity-panel {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.diversity-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a5f3fc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.diversity-section {
+  margin-bottom: 8px;
+}
+
+.diversity-sublabel {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 2px;
+}
+
+.diversity-hist {
+  display: block;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+}
+
+.diversity-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.cv-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 32px;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+}
+
+.cv-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.cv-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cv-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.cv-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #f5c06a;
+}
+
 .inspect-panel {
   position: absolute;
   background: rgba(0, 0, 0, 0.85);

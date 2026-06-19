@@ -7,6 +7,7 @@
   const renderer = new Renderer.Renderer("world", World.WIDTH, World.HEIGHT);
   const chart = new Chart.PopulationChart("population-chart");
   const inspect = new InspectPanel.Panel();
+  const diversity = new Diversity.Panel("diversity-panel");
   renderer.resizeToWindow();
 
   const ui = {
@@ -91,6 +92,11 @@
       chart.render(sim.getHistory());
     }
 
+    // Refresh the diversity readout alongside the stats panel.
+    if (sim.ticks - lastStatUpdate > 20) {
+      diversity.render(sim.stats());
+    }
+
     animationId = requestAnimationFrame(frame);
   }
 
@@ -144,6 +150,7 @@
   window.addEventListener("resize", () => {
     renderer.resizeToWindow();
     chart.resize();
+    diversity.resize();
   });
 
   // Click to inspect a cell.

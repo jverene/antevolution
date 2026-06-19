@@ -86,6 +86,12 @@ The genome has expanded beyond basic physiology and behavior weights to include 
 
 These traits are inherited, recombined sexually, and mutate, so lineages can evolve toward specialist hunters, efficient grazers, or hardy hibernators depending on the biome and ecological pressures.
 
+### Genetic diversity readout
+
+Evolution is a change in the *distribution* of traits, not merely their average. The diversity panel shows live histograms of the speed and metabolism phenotypes across the whole population, plus the **coefficient of variation** (CV = std / mean) for speed, metabolism, sense range, and aggression.
+
+A mean alone hides whether a population is uniform, bimodal, drifting, or under directional selection. A collapsing CV is the visible signature of a **bottleneck** (a few survivors repopulate the world) or a **hard selection sweep** (one optimal strategy dominates); a rising CV means the population is exploring trait space. Watch the histograms narrow during a die-off and re-broaden as descendants diversify.
+
 ## Behavior system
 
 Agents use a **bicameral decision architecture** inspired by the idea of ancient hardwired drives modulated by a flexible control layer:

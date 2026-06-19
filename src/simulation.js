@@ -9,6 +9,19 @@ const Simulation = (function () {
   const { GENOME_LENGTH, BASE_GENOME_LENGTH, PH, NN, NN_OUT, NN_INPUT, createSpeciesGenome, cloneGenome, mutate, crossover, copyMemome, createMemome, computeNNOutputs } = Genetics;
   const { posX, posY, energy, age, species, alive, torpor, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation } = ECS;
 
+  // Traits surfaced in the live diversity readout. Ranges bracket the realistic
+  // post-selection phenotype band so histograms use their full width.
+  const DIVERSITY = {
+    TRAITS: ["speed", "metabolism", "sense", "aggression"],
+    RANGES: {
+      speed: { min: 0.2, max: 2.8 },
+      metabolism: { min: 0.2, max: 2.0 },
+      sense: { min: 2, max: 10 },
+      aggression: { min: 0, max: 3 },
+    },
+    HIST_BUCKETS: 16,
+  };
+
   const PARAM_RANGES = {
     initialAnts: { min: 400, max: 1600 },
     initialHerbivores: { min: 400, max: 1600 },
@@ -45,6 +58,9 @@ const Simulation = (function () {
       this._interactScratch = [];
       this._nnInputs = new Float32Array(NN.INPUTS);
       this._nnOutputs = new Float32Array(NN.OUTPUTS);
+      // Reusable histogram scratch for the diversity readout (avoids per-stats GC).
+      this._speedBuckets = new Uint32Array(DIVERSITY.HIST_BUCKETS);
+      this._metabBuckets = new Uint32Array(DIVERSITY.HIST_BUCKETS);
       this.randomizeParams();
       this.reset();
     }
@@ -931,6 +947,21 @@ const Simulation = (function () {
       let thermal = 0, sociality = 0, wFood = 0, wFlee = 0, wShelter = 0, wFarm = 0;
       const n = ECS.activeCount;
 
+      // Per-species running sums for variance + histograms. We accumulate sums
+      // of x and x^2 so std is a single sqrt at the end, with no second pass.
+      const dt = DIVERSITY.TRAITS;
+      const spCount = dt.length;
+      const sumX = [0, 0, 0, 0];
+      const sumXX = [0, 0, 0, 0];
+      const counts = [0, 0, 0, 0];
+      const speedBuckets = this._speedBuckets;
+      const metabBuckets = this._metabBuckets;
+      speedBuckets.fill(0);
+      metabBuckets.fill(0);
+      const spRange = DIVERSITY.RANGES.speed;
+      const mbRange = DIVERSITY.RANGES.metabolism;
+      const nb = DIVERSITY.HIST_BUCKETS;
+
       for (let i = 0; i < n; i++) {
         const id = active[i];
         const sp = species[id];
@@ -952,6 +983,23 @@ const Simulation = (function () {
         wFlee += phenome[pOff + PH.W_FLEE_PREDATOR];
         wShelter += phenome[pOff + PH.W_SHELTER];
         wFarm += phenome[pOff + PH.W_FARM];
+
+        // Diversity accumulation.
+        const vSpeed = phenome[pOff + PH.SPEED];
+        const vMetab = phenome[pOff + PH.METABOLISM];
+        const vSense = phenome[pOff + PH.SENSE_RANGE];
+        const vAggr = phenome[pOff + PH.AGGRESSION];
+        sumX[0] += vSpeed; sumXX[0] += vSpeed * vSpeed;
+        sumX[1] += vMetab; sumXX[1] += vMetab * vMetab;
+        sumX[2] += vSense; sumXX[2] += vSense * vSense;
+        sumX[3] += vAggr; sumXX[3] += vAggr * vAggr;
+        counts[0]++; counts[1]++; counts[2]++; counts[3]++;
+
+        // Histograms (only speed + metabolism are charted; sense/aggression still get variance).
+        let b = ((vSpeed - spRange.min) / (spRange.max - spRange.min) * nb) | 0;
+        if (b >= 0 && b < nb) speedBuckets[b]++;
+        b = ((vMetab - mbRange.min) / (mbRange.max - mbRange.min) * nb) | 0;
+        if (b >= 0 && b < nb) metabBuckets[b]++;
       }
 
       return {
@@ -973,8 +1021,36 @@ const Simulation = (function () {
         wFlee: n ? wFlee / n : 0,
         wShelter: n ? wShelter / n : 0,
         wFarm: n ? wFarm / n : 0,
+        diversity: this._computeDiversity(sumX, sumXX, counts, spCount),
+        speedHist: Array.from(speedBuckets),
+        metabHist: Array.from(metabBuckets),
         eventLog: this.eventLog.slice(-5),
       };
+    }
+
+    /**
+     * Reduce the per-trait sums into { mean, std, cv } snapshots.
+     * Coefficient of variation (std/mean) is the unit-free diversity measure:
+     * it collapses to ~0 under a hard bottleneck and rises as the population
+     * explores trait space, so a falling CV visually flags a diversity crash.
+     */
+    _computeDiversity(sumX, sumXX, counts, spCount) {
+      const out = {};
+      const names = DIVERSITY.TRAITS;
+      for (let t = 0; t < spCount; t++) {
+        const c = counts[t];
+        const name = names[t];
+        if (c <= 1) {
+          out[name] = { mean: c ? sumX[t] / c : 0, std: 0, cv: 0 };
+          continue;
+        }
+        const mean = sumX[t] / c;
+        // Population variance from sum(x) and sum(x^2).
+        const variance = Math.max(0, sumXX[t] / c - mean * mean);
+        const std = Math.sqrt(variance);
+        out[name] = { mean, std, cv: mean > 1e-6 ? std / mean : 0 };
+      }
+      return out;
     }
 
     /// Export the current world state to a JSON string.
