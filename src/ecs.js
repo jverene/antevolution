@@ -26,11 +26,29 @@ const ECS = (function () {
   const alive = new Uint8Array(MAX_ENTITIES);
   // Torpor countdown: 0 = awake, >0 = hibernating for that many ticks.
   const torpor = new Uint8Array(MAX_ENTITIES);
+  // Ancestry: entity ids recycle, so lineages use a separate monotonic id space
+  // that never recycles. lineageOriginTick records when a lineage was founded
+  // (shared by all descendants), generation is depth from the founder.
+  const parent = new Uint32Array(MAX_ENTITIES);
+  const lineageId = new Uint32Array(MAX_ENTITIES);
+  const generation = new Uint16Array(MAX_ENTITIES);
+  const birthTick = new Uint32Array(MAX_ENTITIES);
+  const lineageOriginTick = new Uint32Array(MAX_ENTITIES);
 
   // Flat genome / phenome / memome storage.
   const genome = new Float64Array(MAX_ENTITIES * GENOME_LENGTH);
   const phenome = new Float32Array(MAX_ENTITIES * PH.COUNT);
   const memome = new Float32Array(MAX_ENTITIES * MEMOME_LENGTH);
+
+  // Aggregate cellular-biology runtime state (changes every tick, unlike the
+  // phenome capacities above). telomere shortens on division (replicative
+  // senescence); cellMass gates division and is split between parent/child;
+  // cellDamage accumulates from metabolism/stress and is cleared by repair.
+  const telomere = new Float32Array(MAX_ENTITIES);
+  const cellMass = new Float32Array(MAX_ENTITIES);
+  const cellDamage = new Float32Array(MAX_ENTITIES);
+  // Flag set when an organism's lineage escaped the telomere limit (cancer).
+  const cancerous = new Uint8Array(MAX_ENTITIES);
 
   // Reputation ledger: each entity has REPUTATION_SLOTS of (id, value).
   // Stored as two parallel arrays for cache locality.
@@ -42,6 +60,9 @@ const ECS = (function () {
   const state = {
     freeCount: MAX_ENTITIES,
     activeCount: 0,
+    // Monotonic counters that never recycle across entity reuse.
+    nextLineageId: 1,
+    nextAncestorId: 1,
   };
   for (let i = 0; i < MAX_ENTITIES; i++) {
     freeList[i] = MAX_ENTITIES - 1 - i;
@@ -56,8 +77,10 @@ const ECS = (function () {
 
   /**
    * Create a new entity. Returns the entity id, or -1 if the pool is exhausted.
+   * ancestry (optional): { parentId, parentLineageId, parentGen, birthTick }
+   *   When omitted the entity is a founder and starts a brand-new lineage.
    */
-  function create(x, y, sp, initialEnergy, initialGenome) {
+  function create(x, y, sp, initialEnergy, initialGenome, ancestry) {
     if (state.freeCount === 0) return -1;
     const id = freeList[--state.freeCount];
 
@@ -68,6 +91,23 @@ const ECS = (function () {
     species[id] = sp | 0;
     alive[id] = 1;
     torpor[id] = 0;
+
+    // Ancestry bookkeeping. Founders (no ancestry) mint a new lineage id;
+    // children inherit the parent's lineage and increment the generation depth.
+    if (ancestry && ancestry.parentLineageId) {
+      parent[id] = ancestry.parentId;
+      lineageId[id] = ancestry.parentLineageId;
+      generation[id] = (ancestry.parentGen + 1) & 0xffff;
+      birthTick[id] = ancestry.birthTick || 0;
+      lineageOriginTick[id] = ancestry.parentOriginTick;
+    } else {
+      parent[id] = 0;
+      lineageId[id] = state.nextLineageId;
+      generation[id] = 0;
+      birthTick[id] = ancestry && ancestry.birthTick ? ancestry.birthTick : 0;
+      lineageOriginTick[id] = birthTick[id];
+      state.nextLineageId++;
+    }
 
     const gOffset = id * GENOME_LENGTH;
     for (let i = 0; i < GENOME_LENGTH; i++) {
@@ -80,6 +120,14 @@ const ECS = (function () {
     for (let i = 0; i < MEMOME_LENGTH; i++) {
       memome[mOffset + i] = 0;
     }
+
+    // Cellular state: start at full telomere capacity, a fraction of max cell
+    // mass, zero damage, not cancerous. Newborns are "fresh"; telomere erosion
+    // and damage accumulate over the organism's lifetime.
+    telomere[id] = phenome[id * PH.COUNT + PH.TELOMERE_LENGTH];
+    cellMass[id] = phenome[id * PH.COUNT + PH.MAX_CELL_MASS] * 0.55;
+    cellDamage[id] = 0;
+    cancerous[id] = 0;
 
     const rOffset = id * REPUTATION_SLOTS;
     for (let i = 0; i < REPUTATION_SLOTS; i++) {
@@ -153,6 +201,8 @@ const ECS = (function () {
 
   /**
    * Reset the entire ECS for a new world.
+   * Lineage ids are monotonic and reset with the world so each run's
+   * ancestry graph starts clean.
    */
   function reset() {
     alive.fill(0);
@@ -164,6 +214,17 @@ const ECS = (function () {
     repId.fill(0xffff);
     repValue.fill(0);
     torpor.fill(0);
+    telomere.fill(0);
+    cellMass.fill(0);
+    cellDamage.fill(0);
+    cancerous.fill(0);
+    parent.fill(0);
+    lineageId.fill(0);
+    generation.fill(0);
+    birthTick.fill(0);
+    lineageOriginTick.fill(0);
+    state.nextLineageId = 1;
+    state.nextAncestorId = 1;
   }
 
   return {
@@ -176,9 +237,18 @@ const ECS = (function () {
     species,
     alive,
     torpor,
+    parent,
+    lineageId,
+    generation,
+    birthTick,
+    lineageOriginTick,
     genome,
     phenome,
     memome,
+    telomere,
+    cellMass,
+    cellDamage,
+    cancerous,
     repId,
     repValue,
     active,

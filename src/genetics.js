@@ -41,9 +41,14 @@ const Genetics = (function () {
     STRIKE_RANGE: 24,
     PREDATION_SKILL: 25,
     HIBERNATION_DRIVE: 26,
+    // Aggregate cellular-biology capacity traits (see PH.* for the phenome side).
+    TELOMERE_LENGTH: 27,
+    REPAIR_RATE: 28,
+    MAX_CELL_MASS: 29,
+    DIVISION_RATIO: 30,
   };
 
-  const GENE_COUNT = 27;
+  const GENE_COUNT = 31;
   const BASE_GENOME_LENGTH = GENE_COUNT * ALLELES_PER_GENE;
 
   // Bicameral modulatory network: hardwired drives + learned/evoled gain control.
@@ -111,8 +116,15 @@ const Genetics = (function () {
     STRIKE_RANGE: 24,
     PREDATION_SKILL: 25,
     HIBERNATION_DRIVE: 26,
+    // Aggregate cellular-biology capacity traits. These set per-organism
+    // maximums/rates; the live telomere/cellMass/cellDamage state lives in the
+    // ECS arrays and changes every tick.
+    TELOMERE_LENGTH: 27,
+    REPAIR_RATE: 28,
+    MAX_CELL_MASS: 29,
+    DIVISION_RATIO: 30,
     // Totals.
-    COUNT: 27,
+    COUNT: 31,
   };
 
   // Gaussian random via Box-Muller.
@@ -173,6 +185,11 @@ const Genetics = (function () {
       setGeneMean(GENE.STRIKE_RANGE, -0.5);
       setGeneMean(GENE.PREDATION_SKILL, -0.5);
       setGeneMean(GENE.HIBERNATION_DRIVE, 0.4);
+      // Herbivore: fast life history — short telomere budget, modest repair.
+      setGeneMean(GENE.TELOMERE_LENGTH, 0.0);
+      setGeneMean(GENE.REPAIR_RATE, 0.2);
+      setGeneMean(GENE.MAX_CELL_MASS, 0.4);
+      setGeneMean(GENE.DIVISION_RATIO, 0.6);
     } else if (species === 3) {
       // Predator: fast, long-range senses, aggressive, costly metabolism.
       setGeneMean(GENE.SPEED, 1.6);
@@ -192,6 +209,11 @@ const Genetics = (function () {
       setGeneMean(GENE.STRIKE_RANGE, 1.5);
       setGeneMean(GENE.PREDATION_SKILL, 1.5);
       setGeneMean(GENE.HIBERNATION_DRIVE, 0.0);
+      // Predator: long-lived, high investment — long telomere, strong repair.
+      setGeneMean(GENE.TELOMERE_LENGTH, 1.2);
+      setGeneMean(GENE.REPAIR_RATE, 1.0);
+      setGeneMean(GENE.MAX_CELL_MASS, 1.0);
+      setGeneMean(GENE.DIVISION_RATIO, 0.3);
     } else if (species === 4) {
       // Advanced / proto-human: high memory, social, flexible behavior.
       setGeneMean(GENE.SPEED, 0.9);
@@ -210,6 +232,11 @@ const Genetics = (function () {
       setGeneMean(GENE.STRIKE_RANGE, -0.5);
       setGeneMean(GENE.PREDATION_SKILL, -0.5);
       setGeneMean(GENE.HIBERNATION_DRIVE, 0.2);
+      // Advanced: longest-lived and best-repairing — large body, slow division.
+      setGeneMean(GENE.TELOMERE_LENGTH, 1.5);
+      setGeneMean(GENE.REPAIR_RATE, 1.3);
+      setGeneMean(GENE.MAX_CELL_MASS, 1.4);
+      setGeneMean(GENE.DIVISION_RATIO, 0.2);
     } else {
       // Ant: balanced forager with latent social/aggressive traits.
       setGeneMean(GENE.SPEED, 0.6);
@@ -225,6 +252,11 @@ const Genetics = (function () {
       setGeneMean(GENE.STRIKE_RANGE, -0.5);
       setGeneMean(GENE.PREDATION_SKILL, -0.5);
       setGeneMean(GENE.HIBERNATION_DRIVE, 0.1);
+      // Ant: fast-turnover colony forager — short telomere, cheap repair.
+      setGeneMean(GENE.TELOMERE_LENGTH, -0.3);
+      setGeneMean(GENE.REPAIR_RATE, 0.1);
+      setGeneMean(GENE.MAX_CELL_MASS, 0.2);
+      setGeneMean(GENE.DIVISION_RATIO, 0.7);
     }
     return g;
   }
@@ -334,6 +366,12 @@ const Genetics = (function () {
     const predationSkillSum = geneSum(g, GENE.PREDATION_SKILL);
     const hibernationDriveSum = geneSum(g, GENE.HIBERNATION_DRIVE);
 
+    // Aggregate cellular-biology capacity traits.
+    const telomereSum = geneSum(g, GENE.TELOMERE_LENGTH);
+    const repairSum = geneSum(g, GENE.REPAIR_RATE);
+    const maxCellMassSum = geneSum(g, GENE.MAX_CELL_MASS);
+    const divisionRatioSum = geneSum(g, GENE.DIVISION_RATIO);
+
     // Species multipliers shift starting ranges.
     const speciesSpeedMult = sp === 3 ? 1.25 : sp === 2 ? 1.15 : 1.0;
     const speciesSenseMult = sp === 3 ? 1.3 : sp === 2 ? 1.1 : 1.0;
@@ -375,6 +413,15 @@ const Genetics = (function () {
     out[PH.STRIKE_RANGE] = Math.max(0, Math.min(3, Math.floor(strikeRangeSum * 0.7 + 0.3)));
     out[PH.PREDATION_SKILL] = Math.max(0, Math.min(2.0, predationSkillSum * 0.6 + 0.2));
     out[PH.HIBERNATION_DRIVE] = Math.max(0, Math.min(1.0, hibernationDriveSum * 0.3 + 0.05));
+
+    // Aggregate cellular-biology capacities. Telomere length is the replicative
+    // budget (shortened each division), repair rate clears accumulated damage,
+    // max cell mass sets the division threshold, division ratio splits mass
+    // between parent and child.
+    out[PH.TELOMERE_LENGTH] = Math.max(10, Math.min(120, telomereSum * 25 + 30));
+    out[PH.REPAIR_RATE] = Math.max(0.02, Math.min(0.5, repairSum * 0.12 + 0.08));
+    out[PH.MAX_CELL_MASS] = Math.max(20, Math.min(200, maxCellMassSum * 35 + 50));
+    out[PH.DIVISION_RATIO] = Math.max(0.3, Math.min(0.6, divisionRatioSum * 0.08 + 0.45));
 
     return out;
   }
