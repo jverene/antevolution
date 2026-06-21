@@ -7,17 +7,29 @@
 const Simulation = (function () {
   const { WorldGrid, WIDTH, HEIGHT, MAX_ORGANISMS_PER_CELL, SPECIES, BIOME, TILE } = World;
   const { GENOME_LENGTH, BASE_GENOME_LENGTH, PH, NN, NN_OUT, NN_INPUT, createSpeciesGenome, cloneGenome, mutate, crossover, copyMemome, createMemome, computeNNOutputs } = Genetics;
-  const { posX, posY, energy, age, species, alive, torpor, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation } = ECS;
+  const { posX, posY, energy, age, species, alive, torpor, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation, generation, birthTick, lineageId, lineageOriginTick, parent, telomere, cellMass, cellDamage, cancerous } = ECS;
 
   // Traits surfaced in the live diversity readout. Ranges bracket the realistic
   // post-selection phenotype band so histograms use their full width.
   const DIVERSITY = {
-    TRAITS: ["speed", "metabolism", "sense", "aggression"],
+    TRAITS: ["speed", "metabolism", "sense", "aggression", "telomere", "repairRate"],
+    // Explicit name -> PH constant index. Trait names don't all uppercase to a
+    // matching PH key, so this is the single source of truth for the mapping.
+    PH_INDEX: {
+      speed: PH.SPEED,
+      metabolism: PH.METABOLISM,
+      sense: PH.SENSE_RANGE,
+      aggression: PH.AGGRESSION,
+      telomere: PH.TELOMERE_LENGTH,
+      repairRate: PH.REPAIR_RATE,
+    },
     RANGES: {
       speed: { min: 0.2, max: 2.8 },
       metabolism: { min: 0.2, max: 2.0 },
       sense: { min: 2, max: 10 },
       aggression: { min: 0, max: 3 },
+      telomere: { min: 10, max: 120 },
+      repairRate: { min: 0.02, max: 0.5 },
     },
     HIST_BUCKETS: 16,
   };
@@ -101,6 +113,8 @@ const Simulation = (function () {
         predators: [],
         advanced: [],
         plants: [],
+        lineageCount: [],
+        maxGeneration: [],
       };
       this.world.generateBiomes(this.noiseSeed);
       this.world.seedNutrients(this.nutrientSeedDensity, this.nutrientSeedMin, this.nutrientSeedMax);
@@ -125,7 +139,7 @@ const Simulation = (function () {
         if (this.world.addOrganism(x, y, sp)) {
           const g = createSpeciesGenome(sp);
           const startEnergy = sp === SPECIES.ADVANCED ? 60 + Math.random() * 40 : 40 + Math.random() * 40;
-          const id = create(x, y, sp, startEnergy, g);
+          const id = create(x, y, sp, startEnergy, g, { birthTick: 0 });
           if (id >= 0) {
             // Advanced agents start with no cultural knowledge; innovation must arise and spread.
           } else {
@@ -204,7 +218,14 @@ const Simulation = (function () {
 
         if (!alive[id]) continue;
 
-        if (age[id] % 20 === 0 && energy[id] > phenome[id * PH.COUNT + PH.REPRO_THRESHOLD] + 25) {
+        // Reproduction fires on a cadence when the parent is fed. Cancerous
+        // lineages ignore the cadence and energy gate — uncontrolled division
+        // that drains the host and seeds a fast-spreading clone.
+        const isCancer = cancerous[id] === 1;
+        if (
+          (isCancer && age[id] % 5 === 0) ||
+          (age[id] % 20 === 0 && energy[id] > phenome[id * PH.COUNT + PH.REPRO_THRESHOLD] + 25)
+        ) {
           this.tryReproduce(id);
         }
       }
@@ -221,6 +242,8 @@ const Simulation = (function () {
         this.history.predators.push(s.predators);
         this.history.advanced.push(s.advanced);
         this.history.plants.push(s.plantCells);
+        this.history.lineageCount.push(s.lineageCount);
+        this.history.maxGeneration.push(s.maxGeneration);
         // Keep last 300 data points (3000 ticks of history).
         if (this.history.ticks.length > 300) {
           this.history.ticks.shift();
@@ -229,6 +252,8 @@ const Simulation = (function () {
           this.history.predators.shift();
           this.history.advanced.shift();
           this.history.plants.shift();
+          this.history.lineageCount.shift();
+          this.history.maxGeneration.shift();
         }
       }
     }
@@ -849,9 +874,54 @@ const Simulation = (function () {
       energy[id] -= cost;
       if (!inTorpor) age[id]++;
 
-      if (energy[id] <= 0 || age[id] > ph[pOff + PH.LONGEVITY]) {
+      // --- Aggregate cellular biology --------------------------------------
+      // Telomere erosion happens at division (in tryReproduce), not per tick.
+      // Per-tick erosion was removed because it exhausted lineages too fast;
+      // division-based erosion alone creates a realistic Hayflick limit where
+      // each generation shortens the replicative budget. Cancerous lineages
+      // skip the senescence machinery below.
+      const tCap = ph[pOff + PH.TELOMERE_LENGTH];
+
+      // Damage accumulation: metabolic work and environmental stress generate
+      // oxidative damage. Heavier bodies accrue slightly more but also buffer it.
+      const mass = Math.max(1, cellMass[id]);
+      const t = this.world.getTemperature(x, y);
+      const tempStress = Math.abs(t - 0.5) * 2;
+      if (!inTorpor) {
+        const damageRate = 0.02 + cost * 0.01 + tempStress * 0.03;
+        cellDamage[id] += damageRate * Math.sqrt(mass / ph[pOff + PH.MAX_CELL_MASS]);
+      }
+      // Repair: an evolvable clearance rate scaled by current mass.
+      cellDamage[id] -= ph[pOff + PH.REPAIR_RATE] * 0.5;
+      if (cellDamage[id] < 0) cellDamage[id] = 0;
+
+      // Cell mass grows from surplus energy (capped by the body plan maximum).
+      const maxMass = ph[pOff + PH.MAX_CELL_MASS];
+      if (cellMass[id] < maxMass && energy[id] > 10) {
+        cellMass[id] += 0.15 * (1 - cellMass[id] / maxMass);
+        if (cellMass[id] > maxMass) cellMass[id] = maxMass;
+      }
+
+      // --- Mortality -------------------------------------------------------
+      // Energy starvation is immediate. Otherwise mortality is a smooth function
+      // of three coupled factors: chronological age approaching longevity,
+      // telomere depletion, and damage saturating the cell mass. This replaces
+      // the old flat age cliff with a steepening Gompertz-like curve.
+      if (energy[id] <= 0) {
         alive[id] = 0;
         this.world.removeOrganism(x, y, species[id]);
+      } else if (!cancerous[id]) {
+        const ageFactor = age[id] / ph[pOff + PH.LONGEVITY];
+        const telomereFactor = tCap > 0 ? 1 - telomere[id] / tCap : 0;
+        const damageFactor = cellDamage[id] / mass;
+        const hazard =
+          Math.max(0, ageFactor - 0.8) * 0.25 +
+          telomereFactor * telomereFactor * 0.15 +
+          damageFactor * damageFactor * 0.2;
+        if (hazard > 0.05 && Math.random() < hazard) {
+          alive[id] = 0;
+          this.world.removeOrganism(x, y, species[id]);
+        }
       }
     }
 
@@ -904,6 +974,26 @@ const Simulation = (function () {
       // Density-dependent reproduction: crowded cells strongly suppress breeding.
       if (localDensity > 2 && Math.random() < (localDensity - 2) * 0.35) return;
 
+      const pParent = parentId * PH.COUNT;
+      const isCancer = cancerous[parentId] === 1;
+
+      // Cell-division gate: an organism must have grown enough cell mass to
+      // divide. Cancerous lineages bypass this (dysregulated cell cycle).
+      const divisionThreshold = phenome[pParent + PH.MAX_CELL_MASS] * 0.55;
+      if (!isCancer && cellMass[parentId] < divisionThreshold) return;
+
+      // Rare somatic catastrophe: a normal division produces a telomerase-locked
+      // clone that escapes the replicative limit. Cancerous cells keep dividing
+      // without erosion and drain their host. Tuned to be a genuinely rare event
+      // (~1 in ~700k divisions) so it surfaces occasionally in long runs.
+      let childIsCancer = isCancer;
+      if (!isCancer && Math.random() < 0.0000015) {
+        childIsCancer = true;
+        if (!this.eventLog.some((e) => e.text.includes("cancer"))) {
+          this.logEvent("First cancer event");
+        }
+      }
+
       const mateId = this.findMate(parentId, px, py, sp);
 
       const spot = candidates[Math.floor(Math.random() * candidates.length)];
@@ -911,7 +1001,7 @@ const Simulation = (function () {
 
       const parentGenome = genome.subarray(parentId * GENOME_LENGTH, (parentId + 1) * GENOME_LENGTH);
       const childGenome = cloneGenome(parentGenome);
-      const pMut = phenome[parentId * PH.COUNT + PH.MUTABILITY];
+      const pMut = phenome[pParent + PH.MUTABILITY];
 
       if (mateId >= 0) {
         // Sexual reproduction: meiotic crossover with a nearby mate.
@@ -924,11 +1014,41 @@ const Simulation = (function () {
       mutate(parentGenome, pMut * 0.3);
       refreshPhenome(parentId);
 
-      const childId = create(spot.x, spot.y, sp, 25, childGenome);
+      const childId = create(spot.x, spot.y, sp, 25, childGenome, {
+        parentId: parentId,
+        parentLineageId: lineageId[parentId],
+        parentGen: generation[parentId],
+        birthTick: this.ticks,
+        parentOriginTick: lineageOriginTick[parentId],
+      });
       if (childId < 0) {
         this.world.removeOrganism(spot.x, spot.y, sp);
         return;
       }
+
+      // --- Cellular inheritance -------------------------------------------
+      // Telomere: the end-replication problem shortens the child's telomere by a
+      // fixed cost each generation (Hayflick limit). Cancerous clones inherit a
+      // fully topped-up telomere and are flagged so they never erode.
+      if (childIsCancer) {
+        telomere[childId] = phenome[childId * PH.COUNT + PH.TELOMERE_LENGTH];
+        cancerous[childId] = 1;
+      } else {
+        // Each division shortens the child's telomere (Hayflick limit).
+        // Erosion of 1.5 per division gives ~25 generations before depletion
+        // for a typical telomere capacity of ~38, which is long enough for
+        // natural selection to act on telomere/repair variation.
+        const erosion = 1.5;
+        telomere[childId] = Math.max(0, telomere[parentId] - erosion);
+      }
+
+      // Cell mass: the parent bud a division-ratio fraction of its mass into the
+      // child. Cancerous divisions also skim mass, accelerating the host drain.
+      const divRatio = phenome[pParent + PH.DIVISION_RATIO];
+      const donated = cellMass[parentId] * divRatio;
+      cellMass[childId] = donated;
+      cellMass[parentId] -= donated;
+      cellDamage[childId] = cellDamage[parentId] * 0.3;
 
       // Inherit memome from parent with small innovation (vertical cultural transmission).
       const cOff = childId * Genetics.MEMOME_LENGTH;
@@ -937,7 +1057,7 @@ const Simulation = (function () {
         memome[cOff + i] = memome[pOff + i] + (Math.random() - 0.5) * 0.02;
       }
 
-      energy[parentId] -= 35;
+      energy[parentId] -= isCancer ? 15 : 35;
     }
 
     // Aggregate statistics for the UI.
@@ -945,15 +1065,24 @@ const Simulation = (function () {
       let ants = 0, herbivores = 0, predators = 0, advanced = 0;
       let speed = 0, sense = 0, metabolism = 0, repro = 0, mutability = 0, aggression = 0;
       let thermal = 0, sociality = 0, wFood = 0, wFlee = 0, wShelter = 0, wFarm = 0;
+      let avgTelomere = 0, avgDamage = 0;
+      let cancerCount = 0;
       const n = ECS.activeCount;
 
       // Per-species running sums for variance + histograms. We accumulate sums
       // of x and x^2 so std is a single sqrt at the end, with no second pass.
+      // Sized generically to DIVERSITY.TRAITS so adding a trait needs no resize.
       const dt = DIVERSITY.TRAITS;
       const spCount = dt.length;
-      const sumX = [0, 0, 0, 0];
-      const sumXX = [0, 0, 0, 0];
-      const counts = [0, 0, 0, 0];
+      const sumX = new Float64Array(spCount);
+      const sumXX = new Float64Array(spCount);
+      const counts = new Uint32Array(spCount);
+      // Phenome offset for each tracked trait, precomputed once. Trait names in
+      // DIVERSITY.TRAITS don't always map 1:1 to a PH constant by uppercasing
+      // (e.g. "sense" -> PH.SENSE_RANGE, "telomere" -> PH.TELOMERE_LENGTH), so
+      // we keep the mapping explicit.
+      const traitPhOff = new Uint8Array(spCount);
+      for (let t = 0; t < spCount; t++) traitPhOff[t] = DIVERSITY.PH_INDEX[dt[t]];
       const speedBuckets = this._speedBuckets;
       const metabBuckets = this._metabBuckets;
       speedBuckets.fill(0);
@@ -961,6 +1090,10 @@ const Simulation = (function () {
       const spRange = DIVERSITY.RANGES.speed;
       const mbRange = DIVERSITY.RANGES.metabolism;
       const nb = DIVERSITY.HIST_BUCKETS;
+
+      // Lineage bookkeeping.
+      const seenLineages = new Set();
+      let maxGeneration = 0;
 
       for (let i = 0; i < n; i++) {
         const id = active[i];
@@ -984,22 +1117,28 @@ const Simulation = (function () {
         wShelter += phenome[pOff + PH.W_SHELTER];
         wFarm += phenome[pOff + PH.W_FARM];
 
-        // Diversity accumulation.
+        // Aggregate cellular-biology sums.
+        avgTelomere += telomere[id];
+        avgDamage += cellDamage[id];
+        if (cancerous[id]) cancerCount++;
+
+        // Diversity accumulation over the tracked traits (generic per-trait).
         const vSpeed = phenome[pOff + PH.SPEED];
         const vMetab = phenome[pOff + PH.METABOLISM];
-        const vSense = phenome[pOff + PH.SENSE_RANGE];
-        const vAggr = phenome[pOff + PH.AGGRESSION];
-        sumX[0] += vSpeed; sumXX[0] += vSpeed * vSpeed;
-        sumX[1] += vMetab; sumXX[1] += vMetab * vMetab;
-        sumX[2] += vSense; sumXX[2] += vSense * vSense;
-        sumX[3] += vAggr; sumXX[3] += vAggr * vAggr;
-        counts[0]++; counts[1]++; counts[2]++; counts[3]++;
+        for (let t = 0; t < spCount; t++) {
+          const v = phenome[pOff + traitPhOff[t]];
+          sumX[t] += v; sumXX[t] += v * v; counts[t]++;
+        }
 
-        // Histograms (only speed + metabolism are charted; sense/aggression still get variance).
+        // Histograms (only speed + metabolism are charted; others still get variance).
         let b = ((vSpeed - spRange.min) / (spRange.max - spRange.min) * nb) | 0;
         if (b >= 0 && b < nb) speedBuckets[b]++;
         b = ((vMetab - mbRange.min) / (mbRange.max - mbRange.min) * nb) | 0;
         if (b >= 0 && b < nb) metabBuckets[b]++;
+
+        // Lineage accumulation (seen lineages, max generation).
+        seenLineages.add(lineageId[id]);
+        if (generation[id] > maxGeneration) maxGeneration = generation[id];
       }
 
       return {
@@ -1021,9 +1160,14 @@ const Simulation = (function () {
         wFlee: n ? wFlee / n : 0,
         wShelter: n ? wShelter / n : 0,
         wFarm: n ? wFarm / n : 0,
+        avgTelomere: n ? avgTelomere / n : 0,
+        avgDamage: n ? avgDamage / n : 0,
+        cancerCount,
         diversity: this._computeDiversity(sumX, sumXX, counts, spCount),
         speedHist: Array.from(speedBuckets),
         metabHist: Array.from(metabBuckets),
+        lineageCount: seenLineages.size,
+        maxGeneration,
         eventLog: this.eventLog.slice(-5),
       };
     }
@@ -1069,12 +1213,19 @@ const Simulation = (function () {
           age: age[id],
           genome: Array.from(genome.subarray(gOff, gOff + GENOME_LENGTH)),
           memome: Array.from(memome.subarray(mOff, mOff + Genetics.MEMOME_LENGTH)),
-          isUserPositioned: false, // Not applicable in evolution, but for completeness
+          lineageId: lineageId[id],
+          generation: generation[id],
+          birthTick: birthTick[id],
+          lineageOriginTick: lineageOriginTick[id],
+          telomere: telomere[id],
+          cellMass: cellMass[id],
+          cellDamage: cellDamage[id],
+          cancerous: cancerous[id],
         });
       }
 
       return JSON.stringify({
-        version: 1,
+        version: 3,
         ticks: this.ticks,
         noiseSeed: this.noiseSeed,
         params: {
@@ -1108,14 +1259,46 @@ const Simulation = (function () {
         herbivoreCount: this.world.herbivoreCount[idx],
         predatorCount: this.world.predatorCount[idx],
         advancedCount: this.world.advancedCount[idx],
+        organism: this._inspectOrganismAt(wx, wy),
       };
+    }
+
+    /**
+     * Find the first living organism at (wx, wy) via the spatial hash and return
+     * a snapshot of its cellular state for the inspect panel. Returns null when
+     * the cell is empty.
+     */
+    _inspectOrganismAt(wx, wy) {
+      this._interactScratch = this._interactScratch || [];
+      this._interactScratch.length = 0;
+      this.spatial.queryCell(wx, wy, this._interactScratch);
+      for (let i = 0; i < this._interactScratch.length; i++) {
+        const id = this._interactScratch[i];
+        if (!alive[id]) continue;
+        const sp = species[id];
+        if (sp === SPECIES.NONE) continue;
+        const pOff = id * PH.COUNT;
+        const speciesNames = ["", "Ant", "Herbivore", "Predator", "Advanced"];
+        return {
+          speciesName: speciesNames[sp] || "Unknown",
+          age: age[id],
+          energy: energy[id],
+          telomere: telomere[id],
+          telomereCap: phenome[pOff + PH.TELOMERE_LENGTH],
+          cellMass: cellMass[id],
+          cellMassCap: phenome[pOff + PH.MAX_CELL_MASS],
+          cellDamage: cellDamage[id],
+          cancerous: cancerous[id] === 1,
+        };
+      }
+      return null;
     }
 
     /// Import a world state from a JSON string.
     importState(json) {
       try {
         const data = JSON.parse(json);
-        if (data.version !== 1) return false;
+        if (data.version !== 1 && data.version !== 2 && data.version !== 3) return false;
 
         ECS.reset();
         this.world.reset();
@@ -1143,9 +1326,24 @@ const Simulation = (function () {
         for (const e of data.entities) {
           const sp = e.species;
           const g = new Float32Array(e.genome);
-          const id = create(e.x, e.y, sp, e.energy, g);
+          const hasLineage = data.version >= 2 && e.lineageId;
+          const id = create(e.x, e.y, sp, e.energy, g, hasLineage ? {
+            parentId: 0,
+            parentLineageId: e.lineageId,
+            parentGen: e.generation || 0,
+            birthTick: e.birthTick || 0,
+            parentOriginTick: e.lineageOriginTick || 0,
+          } : undefined);
           if (id >= 0) {
             age[id] = e.age || 0;
+            // Cellular state: restore from save (v3+) or fall back to
+            // the freshly-initialized values from create().
+            if (data.version >= 3) {
+              telomere[id] = e.telomere != null ? e.telomere : telomere[id];
+              cellMass[id] = e.cellMass != null ? e.cellMass : cellMass[id];
+              cellDamage[id] = e.cellDamage != null ? e.cellDamage : 0;
+              cancerous[id] = e.cancerous || 0;
+            }
             const mOff = id * Genetics.MEMOME_LENGTH;
             const eMemome = e.memome || [];
             for (let i = 0; i < Math.min(eMemome.length, Genetics.MEMOME_LENGTH); i++) {
