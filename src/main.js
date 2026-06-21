@@ -35,6 +35,11 @@
     statWFlee: document.getElementById("stat-wflee"),
     statWShelter: document.getElementById("stat-wshelter"),
     statWFarm: document.getElementById("stat-wfarm"),
+    statLineages: document.getElementById("stat-lineages"),
+    statMaxgen: document.getElementById("stat-maxgen"),
+    statTelomere: document.getElementById("stat-telomere"),
+    statDamage: document.getElementById("stat-damage"),
+    statCancer: document.getElementById("stat-cancer"),
     statEvents: document.getElementById("stat-events"),
   };
 
@@ -64,6 +69,11 @@
     ui.statWFlee.textContent = s.wFlee.toFixed(2);
     ui.statWShelter.textContent = s.wShelter.toFixed(2);
     ui.statWFarm.textContent = s.wFarm.toFixed(2);
+    ui.statLineages.textContent = s.lineageCount.toLocaleString();
+    ui.statMaxgen.textContent = s.maxGeneration.toLocaleString();
+    ui.statTelomere.textContent = s.avgTelomere.toFixed(1);
+    ui.statDamage.textContent = s.avgDamage.toFixed(2);
+    ui.statCancer.textContent = s.cancerCount.toLocaleString();
 
     ui.statEvents.innerHTML = "";
     for (let i = s.eventLog.length - 1; i >= 0; i--) {
