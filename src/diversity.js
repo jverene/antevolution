@@ -13,12 +13,16 @@ const Diversity = (function () {
     metabolism: "#f97316",
     sense: "#a78bfa",
     aggression: "#ef4444",
+    telomere: "#34d399",
+    repairRate: "#facc15",
   };
   const LABELS = {
     speed: "Speed",
     metabolism: "Metabolism",
     sense: "Sense",
     aggression: "Aggression",
+    telomere: "Telomere",
+    repairRate: "Repair",
   };
 
   class Panel {
@@ -113,7 +117,7 @@ const Diversity = (function () {
 
     _renderCV(div) {
       if (!this.cvContainer) return;
-      const traits = ["speed", "metabolism", "sense", "aggression"];
+      const traits = ["speed", "metabolism", "sense", "aggression", "telomere", "repairRate"];
       const parts = traits.map((t) => {
         const d = div[t];
         if (!d) return "";
@@ -134,6 +138,8 @@ const Diversity = (function () {
     metabolism: { min: 0.2, max: 2.0 },
     sense: { min: 2, max: 10 },
     aggression: { min: 0, max: 3 },
+    telomere: { min: 10, max: 120 },
+    repairRate: { min: 0.02, max: 0.5 },
   };
 
   return { Panel, DiversityRanges };
