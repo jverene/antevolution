@@ -64,6 +64,7 @@ const InspectPanel = (function () {
           <span class="inspect-label">Advanced</span>
           <span class="inspect-value">${data.advancedCount}</span>
         </div>
+        ${this._organismSection(data)}
       `;
 
       this.el.querySelector(".inspect-close").addEventListener("click", () => this.hide());
@@ -80,6 +81,54 @@ const InspectPanel = (function () {
       this.el.style.top = `${Math.max(8, top)}px`;
       this.el.style.display = "block";
       this.visible = true;
+    }
+
+    /**
+     * Build the per-organism cellular readout, if the clicked cell holds an
+     * organism. Surfaces the live telomere / cell-mass / damage state plus the
+     * cancer flag for the first entity found at the cell.
+     */
+    _organismSection(data) {
+      const o = data.organism;
+      if (!o) return "";
+      const telomerePct = o.telomereCap > 0
+        ? Math.round((o.telomere / o.telomereCap) * 100)
+        : 0;
+      const massPct = o.cellMassCap > 0
+        ? Math.round((o.cellMass / o.cellMassCap) * 100)
+        : 0;
+      const cancerRow = o.cancerous
+        ? `<div class="inspect-row"><span class="inspect-label">Cancer</span><span class="inspect-value" style="color:#e55">YES</span></div>`
+        : "";
+      return `
+        <div class="inspect-divider"></div>
+        <div class="inspect-row inspect-subheading">Sample organism</div>
+        <div class="inspect-row">
+          <span class="inspect-label">Species</span>
+          <span class="inspect-value">${o.speciesName}</span>
+        </div>
+        <div class="inspect-row">
+          <span class="inspect-label">Age</span>
+          <span class="inspect-value">${o.age}</span>
+        </div>
+        <div class="inspect-row">
+          <span class="inspect-label">Energy</span>
+          <span class="inspect-value">${o.energy.toFixed(0)}</span>
+        </div>
+        <div class="inspect-row">
+          <span class="inspect-label">Telomere</span>
+          <span class="inspect-value">${o.telomere.toFixed(1)} (${telomerePct}%)</span>
+        </div>
+        <div class="inspect-row">
+          <span class="inspect-label">Cell mass</span>
+          <span class="inspect-value">${o.cellMass.toFixed(1)} (${massPct}%)</span>
+        </div>
+        <div class="inspect-row">
+          <span class="inspect-label">Damage</span>
+          <span class="inspect-value">${o.cellDamage.toFixed(2)}</span>
+        </div>
+        ${cancerRow}
+      `;
     }
 
     hide() {
