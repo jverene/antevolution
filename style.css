@@ -28,6 +28,8 @@ html, body {
   padding: 14px 18px;
   border-radius: 8px;
   max-width: 260px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   pointer-events: auto;
   backdrop-filter: blur(4px);
 }
