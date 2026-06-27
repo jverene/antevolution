@@ -52,9 +52,11 @@ const Diversity = (function () {
 
     resize() {
       if (!this.container) return;
-      const rect = this.container.getBoundingClientRect();
+      // Use clientWidth so padding is handled consistently even when a
+      // scrollbar is present on the parent scroll container.
+      const clientW = this.container.clientWidth || 220;
       const dpr = window.devicePixelRatio || 1;
-      const histW = Math.max(40, Math.floor(rect.width - 4));
+      const histW = Math.max(40, Math.floor(clientW - 20));
       const histH = 30;
       for (const key in this.canvases) {
         const c = this.canvases[key];
