@@ -155,6 +155,52 @@ html, body {
   background: rgba(0, 0, 0, 0.3);
 }
 
+.legend {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a5f3fc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #f0f0f0;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.legend-swatch.plant { background: #198c19; }
+.legend-swatch.ant { background: #000000; }
+.legend-swatch.herbivore { background: #356ad0; }
+.legend-swatch.predator { background: #e84e3b; }
+.legend-swatch.advanced { background: #ffff00; }
+.legend-swatch.shelter { background: #8b4513; }
+.legend-swatch.farm { background: #ffa500; }
+
 .chart-container canvas {
   width: 100%;
   height: 100%;
