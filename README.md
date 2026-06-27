@@ -4,15 +4,16 @@ A long-running, browser-based evolution toy. Thousands of organisms wander a 100
 
 ## Run it
 
-Open `index.html` directly in any modern browser, or run the dev server:
+Clone the repository and start the dev server:
 
 ```bash
-cd /Users/hjiang/Developer/evolution
+git clone https://github.com/jverene/antevolution
+cd evolution
 npm run dev
 # then open http://localhost:8765
 ```
 
-No build step or external dependencies are required — the dev server uses Node’s built-in `http` module.
+No build step or external dependencies are required — the dev server uses Node’s built-in `http` module to serve the simulation.
 
 If port `8765` is already in use, the server automatically picks the next free port (`8766`, `8767`, …). You can also override the starting port:
 

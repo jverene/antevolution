@@ -1,14 +1,17 @@
 /**
  * Build a static versions gallery from the git history.
  *
- * For each commit in the recent history this script extracts index.html,
- * style.css, and the src/ directory into versions/<hash>/ so you can open
- * and run any prior iteration of the simulation in the browser.
+ * For each commit in the recent history this script extracts style.css,
+ * README.md, and the src/ directory into versions/<hash>/ so you can open
+ * and run any prior iteration of the simulation in the browser. Older commits
+ * that still contain index.html use that file; newer commits generate the page
+ * from the shared template in scripts/sim-template.js.
  */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const simTemplate = require('./sim-template');
 
 const ROOT = path.resolve(__dirname, '..');
 const VERSIONS_DIR = path.join(ROOT, 'versions');
@@ -64,7 +67,12 @@ function buildVersions() {
     filesToExtract.push(...srcFiles);
 
     for (const file of filesToExtract) {
-      const content = showFile(commit.hash, file);
+      let content = showFile(commit.hash, file);
+      // The root index.html is no longer committed; generate it from the
+      // shared template for newer commits.
+      if (file === 'index.html' && content === null) {
+        content = simTemplate;
+      }
       if (content === null) continue;
       const outPath = path.join(dir, file);
       ensureDir(path.dirname(outPath));

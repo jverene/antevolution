@@ -6,6 +6,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const simTemplate = require("./sim-template");
 
 const START_PORT = parseInt(process.env.PORT, 10) || 8765;
 const MAX_PORT = START_PORT + 20;
@@ -23,7 +24,19 @@ const MIME_TYPES = {
 };
 
 function requestHandler(req, res) {
-  let filePath = path.join(ROOT, req.url === "/" ? "index.html" : req.url);
+  const urlPath = req.url === "/" ? "/index.html" : req.url;
+
+  // The root index.html is no longer committed; serve the shared template.
+  if (urlPath === "/index.html") {
+    res.writeHead(200, {
+      "Content-Type": "text/html",
+      "Cache-Control": "no-cache",
+    });
+    res.end(simTemplate);
+    return;
+  }
+
+  const filePath = path.join(ROOT, urlPath);
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || "application/octet-stream";
 
