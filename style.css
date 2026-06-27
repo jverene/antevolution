@@ -30,8 +30,15 @@ html, body {
   max-width: 260px;
   max-height: calc(100vh - 24px);
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   pointer-events: auto;
   backdrop-filter: blur(4px);
+}
+
+#ui::-webkit-scrollbar {
+  display: none;
 }
 
 #ui h1 {
