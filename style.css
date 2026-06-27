@@ -95,6 +95,23 @@ html, body {
   color: #f5c06a;
 }
 
+.stat-row.pop { color: #f5c06a; }
+.stat-row.pop span { color: #ffefc2; }
+
+.stat-row.lineage { color: #7dd3fc; }
+.stat-row.lineage span { color: #c2f0ff; }
+
+.stat-row.cell { color: #fca5a5; }
+.stat-row.cell span { color: #ffd1d1; }
+
+.stat-row.trait { color: #86efac; }
+.stat-row.trait span { color: #c7ffd8; }
+
+.stat-row.weight { color: #d8b4fe; }
+.stat-row.weight span { color: #efe0ff; }
+
+.stat-row.event { color: #fcd34d; }
+
 .stats-subheading {
   grid-column: 1 / -1;
   font-size: 11px;
@@ -104,6 +121,9 @@ html, body {
   letter-spacing: 0.5px;
   margin-top: 4px;
 }
+
+.stats-subheading.lineage { color: #7dd3fc; }
+.stats-subheading.cell { color: #fca5a5; }
 
 .stats-divider {
   grid-column: 1 / -1;
