@@ -92,19 +92,19 @@
 
     renderer.render(sim.world);
 
+    // Refresh the stats panel and the diversity readout together, reusing one
+    // stats snapshot. The diversity render used to be gated on a second check
+    // of the same condition AFTER lastStatUpdate was bumped, so it never ran.
     if (sim.ticks - lastStatUpdate > 20) {
-      renderStats(sim.stats());
+      const s = sim.stats();
+      renderStats(s);
+      diversity.render(s);
       lastStatUpdate = sim.ticks;
     }
 
     // Render population chart every 30 ticks (~0.5s at 60fps).
     if (sim.ticks % 30 === 0) {
       chart.render(sim.getHistory());
-    }
-
-    // Refresh the diversity readout alongside the stats panel.
-    if (sim.ticks - lastStatUpdate > 20) {
-      diversity.render(sim.stats());
     }
 
     animationId = requestAnimationFrame(frame);
@@ -118,7 +118,9 @@
   ui.btnReset.addEventListener("click", () => {
     sim.reset();
     lastStatUpdate = 0;
-    renderStats(sim.stats());
+    const s = sim.stats();
+    renderStats(s);
+    diversity.render(s);
   });
 
   ui.btnSave.addEventListener("click", () => {
@@ -175,6 +177,8 @@
   });
 
   updateUI();
-  renderStats(sim.stats());
+  const initialStats = sim.stats();
+  renderStats(initialStats);
+  diversity.render(initialStats);
   frame();
 })();
