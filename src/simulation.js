@@ -259,6 +259,9 @@ const Simulation = (function () {
 
         if (!alive[id]) continue;
 
+        // ACO: a fed grazer on its way home lays pheromone trail.
+        this.updateTrailLaying(id);
+
         // Reproduction fires on a cadence when the parent is fed. Cancerous
         // lineages ignore the cadence and energy gate — uncontrolled division
         // that drains the host and seeds a fast-spreading clone.
@@ -684,6 +687,44 @@ const Simulation = (function () {
     }
 
     /**
+     * ACO trail laying: an organism in the homing state (fedTrail > 0) deposits
+     * pheromone on its current cell each tick, building a scent corridor from
+     * the food patch back toward its colony nest. Arriving home ends the state.
+     */
+    updateTrailLaying(id) {
+      if (fedTrail[id] === 0) return;
+      const hx = this.wrapDelta(homeX[id] - posX[id], WIDTH);
+      const hy = this.wrapDelta(homeY[id] - posY[id], HEIGHT);
+      if (hx * hx + hy * hy <= HOME_RADIUS * HOME_RADIUS) {
+        fedTrail[id] = 0;
+        // Home is played out: cut the anchor and roam free. The next rich
+        // find re-anchors the ant (colony collapse and re-founding).
+        if (this.localPlantSum(homeX[id], homeY[id], 8) < 1500) {
+          homeX[id] = posX[id];
+          homeY[id] = posY[id];
+        }
+        return;
+      }
+      const rate = phenome[id * PH.COUNT + PH.PHEROMONE_DEPOSIT];
+      this.world.depositPheromone(posX[id], posY[id], PHEROMONE_DEPOSIT_RATE * rate);
+      fedTrail[id]--;
+    }
+
+    /**
+     * Total plant biomass in the (2r+1)² block around (x, y). Used by the ACO
+     * relocation/adoption rules to judge how rich a neighborhood is.
+     */
+    localPlantSum(x, y, r) {
+      let sum = 0;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          sum += this.world.getPlantBiomass(x + dx, y + dy);
+        }
+      }
+      return sum;
+    }
+
+    /**
      * Interaction phase: feeding, aggression, teaching, tile modification.
      */
     interact(id) {
@@ -702,6 +743,25 @@ const Simulation = (function () {
           const bite = 2 * ph[pOff + PH.FOOD_EFFICIENCY];
           const eaten = this.world.takePlantBiomass(x, y, bite);
           energy[id] += eaten;
+          // ACO: report finds to the colony — but don't let a dead home become
+          // a trap. Far from home, a rich patch is worth relocating to (adopt
+          // it as the new anchor); a scrap is only worth reporting (home and
+          // lay trail). Near home, home once full to scent the local ground.
+          if (eaten > 0 && ph[pOff + PH.PHEROMONE_DEPOSIT] > 0) {
+            const hx = this.wrapDelta(homeX[id] - x, WIDTH);
+            const hy = this.wrapDelta(homeY[id] - y, HEIGHT);
+            if (hx * hx + hy * hy > 225) {
+              // 15+ cells from home.
+              if (this.localPlantSum(x, y, 3) > 3000) {
+                homeX[id] = x;
+                homeY[id] = y;
+              } else {
+                fedTrail[id] = TRAIL_TICKS;
+              }
+            } else if (energy[id] > ph[pOff + PH.REPRO_THRESHOLD] + 40) {
+              fedTrail[id] = TRAIL_TICKS;
+            }
+          }
         }
       }
 
