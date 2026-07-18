@@ -656,6 +656,23 @@ const Simulation = (function () {
 
       const no = NN_OUT;
       const sp = species[id];
+
+      // Homing state: a fed trail-layer beelines back to its colony nest,
+      // ignoring food, pheromone, and social drives. Predator fear still applies.
+      if (fedTrail[id] > 0) {
+        const hx = this.wrapDelta(homeX[id] - posX[id], WIDTH);
+        const hy = this.wrapDelta(homeY[id] - posY[id], HEIGHT);
+        const hlen = Math.sqrt(hx * hx + hy * hy) || 1;
+        desiredDx += HOMING_WEIGHT * (hx / hlen);
+        desiredDy += HOMING_WEIGHT * (hy / hlen);
+        desiredDx -= ph[pOff + PH.W_FLEE_PREDATOR] * nn[no.FLEE_MULT] * s.predatorDx;
+        desiredDy -= ph[pOff + PH.W_FLEE_PREDATOR] * nn[no.FLEE_MULT] * s.predatorDy;
+        let score = desiredDx * ux + desiredDy * uy;
+        score += ph[pOff + PH.W_EXPLORE] * nn[no.EXPLORE_BOOST] * (Math.random() - 0.5) * 0.25;
+        if (dx === 0 && dy === 0) score -= 0.5;
+        return score;
+      }
+
       // For predators the "food" stimulus is prey, so they use W_PREY instead of W_FOOD.
       const foodWeight = sp === SPECIES.PREDATOR ? ph[pOff + PH.W_PREY] : ph[pOff + PH.W_FOOD];
       desiredDx += foodWeight * nn[no.FOOD_MULT] * s.foodDx;
@@ -675,6 +692,10 @@ const Simulation = (function () {
 
       desiredDx += ph[pOff + PH.W_FARM] * nn[no.FARM_MULT] * s.farmDx;
       desiredDy += ph[pOff + PH.W_FARM] * nn[no.FARM_MULT] * s.farmDy;
+
+      // ACO recruitment: climb the pheromone gradient toward the food end of a trail.
+      desiredDx += ph[pOff + PH.W_PHEROMONE] * nn[no.PHER_MULT] * s.pheromoneDx;
+      desiredDy += ph[pOff + PH.W_PHEROMONE] * nn[no.PHER_MULT] * s.pheromoneDy;
 
       // Score is alignment with desired direction plus exploration noise.
       let score = desiredDx * ux + desiredDy * uy;
