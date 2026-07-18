@@ -5,9 +5,20 @@
  */
 
 const Simulation = (function () {
-  const { WorldGrid, WIDTH, HEIGHT, MAX_ORGANISMS_PER_CELL, SPECIES, BIOME, TILE } = World;
+  const { WorldGrid, WIDTH, HEIGHT, MAX_ORGANISMS_PER_CELL, SPECIES, BIOME, TILE, PHEROMONE_MAX } = World;
   const { GENOME_LENGTH, BASE_GENOME_LENGTH, PH, NN, NN_OUT, NN_INPUT, createSpeciesGenome, cloneGenome, mutate, crossover, copyMemome, createMemome, computeNNOutputs } = Genetics;
-  const { posX, posY, energy, age, species, alive, torpor, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation, generation, birthTick, lineageId, lineageOriginTick, parent, telomere, cellMass, cellDamage, cancerous } = ECS;
+  const { posX, posY, energy, age, species, alive, torpor, fedTrail, homeX, homeY, genome, phenome, memome, active, create, destroy, cleanup, refreshPhenome, setReputation, getReputation, generation, birthTick, lineageId, lineageOriginTick, parent, telomere, cellMass, cellDamage, cancerous } = ECS;
+
+  // --- ACO pheromone-trail tuning -------------------------------------------
+  // Ants (and any grazer that evolves the trait) lay pheromone while homing
+  // after a meal; the field evaporates globally each tick; foragers climb the
+  // local gradient. See README "Pheromone trails (ACO)".
+  const PHEROMONE_EVAPORATION = 0.015; // fraction lost per tick (half-life ~45 ticks)
+  const TRAIL_TICKS = 240; // max ticks spent homing and laying trail after feeding
+  const PHEROMONE_DEPOSIT_RATE = 2.0; // units per tick, scaled by PHEROMONE_DEPOSIT trait
+  const PHEROMONE_SENSE_MIN = 0.5; // trace amounts below this are ignored
+  const HOME_RADIUS = 3; // distance from the nest that ends the homing state
+  const HOMING_WEIGHT = 2.0; // drive strength pulling a fed ant back to its nest
 
   // Traits surfaced in the live diversity readout. Ranges bracket the realistic
   // post-selection phenotype band so histograms use their full width.
@@ -185,6 +196,7 @@ const Simulation = (function () {
       this.ticks++;
 
       this.world.growPlants();
+      this.world.evaporatePheromone(PHEROMONE_EVAPORATION);
       if (this.ticks % 50 === 0) {
         this.world.decayTiles();
       }
