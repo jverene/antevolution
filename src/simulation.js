@@ -458,6 +458,9 @@ const Simulation = (function () {
         farmDx: 0,
         farmDy: 0,
         farmCount: 0,
+        pheromoneDx: 0,
+        pheromoneDy: 0,
+        pheromoneStrength: 0,
       };
 
       // Find best food direction (plants for grazers, prey for predators).
@@ -560,8 +563,13 @@ const Simulation = (function () {
         out.otherDy = ody / olen;
       }
 
-      // Scan modified tiles.
+      // Scan modified tiles; in the same pass, find the strongest pheromone
+      // cell (ACO recruitment gradient — foragers climb toward the peak, which
+      // sits at the food end of a trail where deposits are renewed).
       let shx = 0, shy = 0, fmx = 0, fmy = 0;
+      let bestPheromone = PHEROMONE_SENSE_MIN;
+      let bestPherX = 0;
+      let bestPherY = 0;
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (dx === 0 && dy === 0) continue;
@@ -576,7 +584,19 @@ const Simulation = (function () {
             fmy += dy / dist;
             out.farmCount++;
           }
+          const pv = this.world.getPheromone(x + dx, y + dy);
+          if (pv > bestPheromone) {
+            bestPheromone = pv;
+            bestPherX = dx;
+            bestPherY = dy;
+          }
         }
+      }
+      if (bestPheromone > PHEROMONE_SENSE_MIN) {
+        const plen = Math.sqrt(bestPherX * bestPherX + bestPherY * bestPherY) || 1;
+        out.pheromoneDx = bestPherX / plen;
+        out.pheromoneDy = bestPherY / plen;
+        out.pheromoneStrength = bestPheromone;
       }
       if (out.shelterCount > 0) {
         const slen = Math.sqrt(shx * shx + shy * shy) || 1;
@@ -612,6 +632,7 @@ const Simulation = (function () {
       inp[NN_INPUT.ENERGY] = Math.min(1, energy[id] / 150);
       const t = this.world.getTemperature(x, y);
       inp[NN_INPUT.TEMP_STRESS] = Math.abs(t - 0.5) * 2;
+      inp[NN_INPUT.PHEROMONE_STRENGTH] = Math.min(1, s.pheromoneStrength / 50);
     }
 
     /**
