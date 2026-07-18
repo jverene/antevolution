@@ -46,17 +46,20 @@ const Genetics = (function () {
     REPAIR_RATE: 28,
     MAX_CELL_MASS: 29,
     DIVISION_RATIO: 30,
+    // Pheromone (ACO) traits: trail attraction and trail deposit rate.
+    W_PHEROMONE: 31,
+    PHEROMONE_DEPOSIT: 32,
   };
 
-  const GENE_COUNT = 31;
+  const GENE_COUNT = 33;
   const BASE_GENOME_LENGTH = GENE_COUNT * ALLELES_PER_GENE;
 
   // Bicameral modulatory network: hardwired drives + learned/evoled gain control.
   // The NN takes sensory/context inputs and outputs multipliers on the base drives.
   const NN = {
-    INPUTS: 8,
+    INPUTS: 9,
     HIDDEN: 4,
-    OUTPUTS: 7,
+    OUTPUTS: 8,
   };
   const NN_OUT = {
     FOOD_MULT: 0,
@@ -66,6 +69,7 @@ const Genetics = (function () {
     SHELTER_MULT: 4,
     FARM_MULT: 5,
     EXPLORE_BOOST: 6,
+    PHER_MULT: 7,
   };
   const NN_INPUT = {
     FOOD_STRENGTH: 0,
@@ -76,6 +80,7 @@ const Genetics = (function () {
     FARM_COUNT: 5,
     ENERGY: 6,
     TEMP_STRESS: 7,
+    PHEROMONE_STRENGTH: 8,
   };
   const NN_WEIGHT_COUNT =
     NN.INPUTS * NN.HIDDEN + NN.HIDDEN + NN.HIDDEN * NN.OUTPUTS + NN.OUTPUTS;
@@ -123,8 +128,11 @@ const Genetics = (function () {
     REPAIR_RATE: 28,
     MAX_CELL_MASS: 29,
     DIVISION_RATIO: 30,
+    // Pheromone (ACO) traits.
+    W_PHEROMONE: 31,
+    PHEROMONE_DEPOSIT: 32,
     // Totals.
-    COUNT: 31,
+    COUNT: 33,
   };
 
   // Gaussian random via Box-Muller.
@@ -190,6 +198,9 @@ const Genetics = (function () {
       setGeneMean(GENE.REPAIR_RATE, 0.2);
       setGeneMean(GENE.MAX_CELL_MASS, 0.4);
       setGeneMean(GENE.DIVISION_RATIO, 0.6);
+      // Herbivores are solitary grazers: no trail laying, weak trail interest.
+      setGeneMean(GENE.W_PHEROMONE, 0.0);
+      setGeneMean(GENE.PHEROMONE_DEPOSIT, -0.5);
     } else if (species === 3) {
       // Predator: fast, long-range senses, aggressive, costly metabolism.
       setGeneMean(GENE.SPEED, 1.6);
@@ -214,6 +225,9 @@ const Genetics = (function () {
       setGeneMean(GENE.REPAIR_RATE, 1.0);
       setGeneMean(GENE.MAX_CELL_MASS, 1.0);
       setGeneMean(GENE.DIVISION_RATIO, 0.3);
+      // Predators hunt prey, not plants: no trail laying or following.
+      setGeneMean(GENE.W_PHEROMONE, 0.0);
+      setGeneMean(GENE.PHEROMONE_DEPOSIT, -0.5);
     } else if (species === 4) {
       // Advanced / proto-human: high memory, social, flexible behavior.
       setGeneMean(GENE.SPEED, 0.9);
@@ -237,6 +251,9 @@ const Genetics = (function () {
       setGeneMean(GENE.REPAIR_RATE, 1.3);
       setGeneMean(GENE.MAX_CELL_MASS, 1.4);
       setGeneMean(GENE.DIVISION_RATIO, 0.2);
+      // Advanced agents get a slight latent interest in trails but don't lay them.
+      setGeneMean(GENE.W_PHEROMONE, 0.2);
+      setGeneMean(GENE.PHEROMONE_DEPOSIT, -0.5);
     } else {
       // Ant: balanced forager with latent social/aggressive traits.
       setGeneMean(GENE.SPEED, 0.6);
@@ -257,6 +274,9 @@ const Genetics = (function () {
       setGeneMean(GENE.REPAIR_RATE, 0.1);
       setGeneMean(GENE.MAX_CELL_MASS, 0.2);
       setGeneMean(GENE.DIVISION_RATIO, 0.7);
+      // Ant: colony forager — follows pheromone trails and lays them after feeding.
+      setGeneMean(GENE.W_PHEROMONE, 1.2);
+      setGeneMean(GENE.PHEROMONE_DEPOSIT, 1.0);
     }
     return g;
   }
@@ -372,6 +392,10 @@ const Genetics = (function () {
     const maxCellMassSum = geneSum(g, GENE.MAX_CELL_MASS);
     const divisionRatioSum = geneSum(g, GENE.DIVISION_RATIO);
 
+    // Pheromone (ACO) traits.
+    const wPheromoneSum = geneSum(g, GENE.W_PHEROMONE);
+    const pheromoneDepositSum = geneSum(g, GENE.PHEROMONE_DEPOSIT);
+
     // Species multipliers shift starting ranges.
     const speciesSpeedMult = sp === 3 ? 1.25 : sp === 2 ? 1.15 : 1.0;
     const speciesSenseMult = sp === 3 ? 1.3 : sp === 2 ? 1.1 : 1.0;
@@ -422,6 +446,11 @@ const Genetics = (function () {
     out[PH.REPAIR_RATE] = Math.max(0.02, Math.min(0.5, repairSum * 0.12 + 0.08));
     out[PH.MAX_CELL_MASS] = Math.max(20, Math.min(200, maxCellMassSum * 35 + 50));
     out[PH.DIVISION_RATIO] = Math.max(0.3, Math.min(0.6, divisionRatioSum * 0.08 + 0.45));
+
+    // Pheromone (ACO): attraction may go negative (trail aversion); deposit
+    // rate is clamped non-negative — 0 means the organism never lays trails.
+    out[PH.W_PHEROMONE] = wPheromoneSum;
+    out[PH.PHEROMONE_DEPOSIT] = Math.max(0, Math.min(2.0, pheromoneDepositSum * 0.5));
 
     return out;
   }
