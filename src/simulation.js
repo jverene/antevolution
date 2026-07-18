@@ -135,6 +135,12 @@ const Simulation = (function () {
       }
       this.seedScatteredNutrients();
 
+      // Colonies are founded near existing food so the initial ants can forage.
+      // Nest count scales with the ant population: a single mega-colony strips
+      // its neighborhood bare and starves, while several smaller colonies
+      // spread the foraging risk across the map.
+      this.world.spawnNests(Math.max(3, Math.min(10, Math.round(this.initialAnts / 120))));
+
       this.seedSpecies(SPECIES.ANT, this.initialAnts);
       this.seedSpecies(SPECIES.HERBIVORE, this.initialHerbivores);
       this.seedSpecies(SPECIES.PREDATOR, this.initialPredators);
@@ -144,15 +150,38 @@ const Simulation = (function () {
     }
 
     seedSpecies(sp, count) {
+      const nests = this.world.nests;
       for (let i = 0; i < count; i++) {
-        const x = Math.floor(Math.random() * WIDTH);
-        const y = Math.floor(Math.random() * HEIGHT);
+        let x;
+        let y;
+        let nest = null;
+        // Most ants start in colonies: a tight ring around a nest, inside the
+        // food-scored zone (see spawnNests) so founders can sense the plants.
+        // The rest spawn scattered as before — a reserve that keeps the species
+        // alive if a colony's neighborhood fails, and a source of new colonies.
+        if (sp === SPECIES.ANT && nests.length > 0 && Math.random() < 0.6) {
+          nest = nests[Math.floor(Math.random() * nests.length)];
+          const angle = Math.random() * Math.PI * 2;
+          const r = 2 + Math.random() * 10;
+          x = nest.x + Math.floor(Math.cos(angle) * r);
+          y = nest.y + Math.floor(Math.sin(angle) * r);
+        } else {
+          x = Math.floor(Math.random() * WIDTH);
+          y = Math.floor(Math.random() * HEIGHT);
+        }
+        // Ring offsets around an edge nest can leave the map; wrap to torus.
+        x = ((x % WIDTH) + WIDTH) % WIDTH;
+        y = ((y % HEIGHT) + HEIGHT) % HEIGHT;
         if (this.world.addOrganism(x, y, sp)) {
           const g = createSpeciesGenome(sp);
           const startEnergy = sp === SPECIES.ADVANCED ? 60 + Math.random() * 40 : 40 + Math.random() * 40;
           const id = create(x, y, sp, startEnergy, g, { birthTick: 0 });
           if (id >= 0) {
             // Advanced agents start with no cultural knowledge; innovation must arise and spread.
+            if (nest) {
+              homeX[id] = nest.x;
+              homeY[id] = nest.y;
+            }
           } else {
             this.world.removeOrganism(x, y, sp);
           }
@@ -1068,6 +1097,10 @@ const Simulation = (function () {
       for (let i = 0; i < Genetics.MEMOME_LENGTH; i++) {
         memome[cOff + i] = memome[pOff + i] + (Math.random() - 0.5) * 0.02;
       }
+
+      // Colony membership is hereditary: the child keeps the parent's nest as home.
+      homeX[childId] = homeX[parentId];
+      homeY[childId] = homeY[parentId];
 
       energy[parentId] -= isCancer ? 15 : 35;
     }
