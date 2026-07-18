@@ -31,6 +31,8 @@ PORT=3000 npm run dev
 - **Yellow** squares contain advanced / proto-human agents.
 - **Brown** squares are shelters built by advanced agents.
 - **Orange** squares are cultivated farms.
+- **Dark red** squares are ant colony nests.
+- **Pale cyan** tint marks pheromone trails (stronger = fresher).
 - Up to 5 organisms may occupy the same square.
 
 ## Controls
@@ -61,7 +63,7 @@ The simulation is a food web with three trophic levels plus an optional advanced
 
 ## Evolution model
 
-Each organism carries a diploid genome of 24 genes × 2 alleles (48 floating-point values) plus a small neural-network weight vector. Genes influence physical traits (speed, sense range, metabolism, thermal efficiency, longevity) and behavioral weights (food attraction, predator fear, aggression toward same/other species, shelter/farm attraction, exploration).
+Each organism carries a diploid genome of 33 genes × 2 alleles (66 floating-point values) plus a small neural-network weight vector. Genes influence physical traits (speed, sense range, metabolism, thermal efficiency, longevity) and behavioral weights (food attraction, predator fear, aggression toward same/other species, shelter/farm attraction, pheromone attraction and deposition, exploration).
 
 Traits are computed from allele sums plus **epistatic trade-offs**: faster movement and wider sensing increase metabolic cost, while thermal-efficiency genes reduce it. Mutations are Gaussian point mutations plus rare large-effect chromosomal events. Selection emerges from energy balance, starvation, aging, competition for space and food, predation, and biome-specific thermodynamic costs.
 
@@ -98,11 +100,23 @@ A mean alone hides whether a population is uniform, bimodal, drifting, or under 
 Agents use a **bicameral decision architecture** inspired by the idea of ancient hardwired drives modulated by a flexible control layer:
 
 - **Hardwired drives** are encoded as evolved behavioral weights in the genome: food attraction, predator fear, aggression toward same/other species, shelter/farm attraction, and exploration.
-- **Modulatory neural net**: a tiny fixed-topology network (8 inputs, 4 hidden ReLU neurons, 7 outputs) reads sensory context and internal state, then outputs multipliers on each drive. For example, it can suppress food attraction when predators are nearby, boost shelter-seeking in cold biomes, or dial up exploration when energy is high.
+- **Modulatory neural net**: a tiny fixed-topology network (9 inputs, 4 hidden ReLU neurons, 8 outputs) reads sensory context and internal state, then outputs multipliers on each drive. For example, it can suppress food attraction when predators are nearby, boost shelter-seeking in cold biomes, dial up trail-following when a pheromone gradient is strong, or dial up exploration when energy is high.
 - Each tick the agent senses nearby food, predators, same-species neighbors, other species, shelters, and farms; the NN scales the drive weights; and the agent moves in the direction that best aligns with the resulting desired vector.
 - Both the base drive weights and the NN weights are inherited and evolve, so strategies such as "flee predators", "hunt prey", "seek shelter in tundra", or "farm fertile tiles" can emerge without being explicitly programmed.
 
 The NN is kept small and allocation-free so the simulation stays fast: inference is just a tight loop over typed arrays, with no dynamic topology or backpropagation.
+
+## Pheromone trails (ACO)
+
+Ants forage from permanent **colony nests** using an ant-colony-optimization-style stigmergy loop:
+
+- **Colony founding** — at reset, 3–10 nests (scaled to the initial ant population) are placed where plant biomass within foraging range is richest, so no colony is founded in barren land. Most ants hatch in a ring around a nest; the rest spawn scattered as a reserve that keeps the species alive if a colony's neighborhood fails.
+- **Trail laying** — after a good meal far from home, an ant enters a homing state: it beelines back to its nest, depositing pheromone every tick. Trails therefore connect rich food patches to colonies.
+- **Evaporation** — the pheromone field loses a fixed fraction every tick (half-life ~45 ticks), so trails to depleted patches fade instead of misleading foragers.
+- **Recruitment** — a forager senses the strongest pheromone cell nearby and climbs the gradient, which points at the food end of an active trail where deposits are renewed.
+- **Relocation** — a fed ant that finds an exceptionally rich patch far from home adopts it as a new anchor, and an ant whose played-out home neighborhood has been stripped bare cuts the anchor and roams free. Colonies thus collapse and re-found as the food landscape shifts.
+
+Trail following (`W_PHEROMONE`) and trail laying rate (`PHEROMONE_DEPOSIT`) are ordinary evolvable genes with a dedicated neural-net input and output, so trail use can strengthen, weaken, or even invert (trail aversion) under selection — and non-ant species can evolve or lose the trait. Ants start as colony foragers; herbivores and predators start with the trait switched off. Colony membership is hereditary (offspring keep their parent's nest) and survives save/load.
 
 ## Biomes
 
