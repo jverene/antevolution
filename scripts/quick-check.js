@@ -114,6 +114,44 @@ for (let i = 0; i < n; i++) {
 }
 assert(telOk && massOk && damOk, "cellular state values are non-negative");
 
+// ACO pheromone-trail checks.
+assert(sim.world.pheromone instanceof Float32Array, "world has pheromone field");
+assert(Array.isArray(sim.world.nests) && sim.world.nests.length >= 1, "world has ant colony nests");
+assert(typeof s.wPheromone === "number", "stats has wPheromone");
+const nest0 = sim.world.nests[0];
+assert(sim.world.getTileType(nest0.x, nest0.y) === World.TILE.NEST, "nest site is a NEST tile");
+
+// Deposit/evaporation mechanics (deterministic).
+sim.world.depositPheromone(5, 5, 10);
+assert(sim.world.getPheromone(5, 5) > 0, "pheromone deposit works");
+sim.world.evaporatePheromone(0.5);
+assert(sim.world.getPheromone(5, 5) < 10, "pheromone evaporates");
+
+// Trail sensing: an ant with a strong deposit to its east must report a
+// pheromone gradient pointing at it.
+let antId = -1;
+for (let i = 0; i < n; i++) {
+  const id = ECS.active[i];
+  if (ECS.alive[id] && ECS.species[id] === World.SPECIES.ANT) { antId = id; break; }
+}
+assert(antId >= 0, "found a live ant for trail-sensing check");
+sim.world.depositPheromone(ECS.posX[antId] + 2, ECS.posY[antId], 100);
+const senses = sim.summarizeSenses(antId, ECS.posX[antId], ECS.posY[antId], 5);
+assert(senses.pheromoneStrength > 0, "ant senses nearby pheromone trail");
+assert(senses.pheromoneDx > 0.5, "pheromone gradient points toward the deposit");
+
+// Colony membership: live ants carry one of the world's nests as home.
+let antsWithNestHome = 0;
+for (let i = 0; i < n; i++) {
+  const id = ECS.active[i];
+  if (ECS.alive[id] && ECS.species[id] === World.SPECIES.ANT) {
+    if (sim.world.nests.some((nest) => nest.x === ECS.homeX[id] && nest.y === ECS.homeY[id])) {
+      antsWithNestHome++;
+    }
+  }
+}
+assert(antsWithNestHome > 0, "live ants carry a colony nest as home");
+
 // Save/load round-trip: export, reimport, verify cellular fields survive.
 let homeSumBefore = 0;
 for (let i = 0; i < ECS.activeCount; i++) {
