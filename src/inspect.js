@@ -44,6 +44,10 @@ const InspectPanel = (function () {
           <span class="inspect-value">${data.nutrients}</span>
         </div>
         <div class="inspect-row">
+          <span class="inspect-label">Pheromone</span>
+          <span class="inspect-value">${(data.pheromone || 0).toFixed(1)}</span>
+        </div>
+        <div class="inspect-row">
           <span class="inspect-label">Tile</span>
           <span class="inspect-value">${tile}</span>
         </div>

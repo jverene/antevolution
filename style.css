@@ -209,6 +209,8 @@ html, body {
 .legend-swatch.advanced { background: #ffff00; }
 .legend-swatch.shelter { background: #8b4513; }
 .legend-swatch.farm { background: #ffa500; }
+.legend-swatch.nest { background: #8b2d2d; }
+.legend-swatch.pheromone { background: #bef0e6; }
 
 .chart-container canvas {
   width: 100%;

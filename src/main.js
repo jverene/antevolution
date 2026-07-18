@@ -35,6 +35,7 @@
     statWFlee: document.getElementById("stat-wflee"),
     statWShelter: document.getElementById("stat-wshelter"),
     statWFarm: document.getElementById("stat-wfarm"),
+    statWPheromone: document.getElementById("stat-wpheromone"),
     statLineages: document.getElementById("stat-lineages"),
     statMaxgen: document.getElementById("stat-maxgen"),
     statTelomere: document.getElementById("stat-telomere"),
@@ -69,6 +70,7 @@
     ui.statWFlee.textContent = s.wFlee.toFixed(2);
     ui.statWShelter.textContent = s.wShelter.toFixed(2);
     ui.statWFarm.textContent = s.wFarm.toFixed(2);
+    ui.statWPheromone.textContent = s.wPheromone.toFixed(2);
     ui.statLineages.textContent = s.lineageCount.toLocaleString();
     ui.statMaxgen.textContent = s.maxGeneration.toLocaleString();
     ui.statTelomere.textContent = s.avgTelomere.toFixed(1);
