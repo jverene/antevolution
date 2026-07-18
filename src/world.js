@@ -30,6 +30,7 @@ const World = (function () {
     NORMAL: 0,
     SHELTER: 1,
     FARM: 2,
+    NEST: 3,
   };
 
   // ACO pheromone trail capacity per cell.
@@ -60,6 +61,8 @@ const World = (function () {
       // ACO pheromone trail field. Ants deposit it while homing after a meal;
       // it evaporates every tick. Not persisted in saves (ephemeral).
       this.pheromone = new Float32Array(this.area);
+      // Ant colony nest sites: [{x, y}, ...]. Set by spawnNests().
+      this.nests = [];
 
       // Per-species occupancy counts (still used for rendering and movement caps).
       this.antCount = new Uint8Array(this.area);
@@ -328,14 +331,14 @@ const World = (function () {
     }
 
     /**
-     * Decay modified tiles over time.
+     * Decay modified tiles over time. Nests are permanent colony sites.
      */
     decayTiles() {
       const tileType = this.tileType;
       const integrity = this.tileIntegrity;
       const area = this.area;
       for (let i = 0; i < area; i++) {
-        if (tileType[i] === TILE.NORMAL) continue;
+        if (tileType[i] === TILE.NORMAL || tileType[i] === TILE.NEST) continue;
         if (integrity[i] > 0) {
           integrity[i]--;
         } else {
@@ -369,6 +372,49 @@ const World = (function () {
         let v = p[i] * keep;
         if (v < 0.05) v = 0;
         p[i] = v;
+      }
+    }
+
+    /**
+     * Place ant colony nests as permanent tiles near existing food. A colony
+     * founded in barren land starves before trails can form, so candidates are
+     * scored by the plant biomass within foraging range. Call after plants are
+     * seeded so biomass data exists.
+     */
+    spawnNests(count) {
+      this.nests = [];
+      for (let n = 0; n < count; n++) {
+        let bestX = -1;
+        let bestY = -1;
+        let bestScore = -1;
+        for (let c = 0; c < 60; c++) {
+          const cx = Math.floor(Math.random() * this.width);
+          const cy = Math.floor(Math.random() * this.height);
+          const t = this.temperature[this.idx(cx, cy)];
+          if (t < 0.2 || t > 0.8) continue;
+          // Score by total plant biomass within the colony's spawn/forage ring
+          // (radius 12 — seedSpecies scatters founders out to that range).
+          let score = 0;
+          for (let dy = -12; dy <= 12; dy++) {
+            for (let dx = -12; dx <= 12; dx++) {
+              score += this.plantBiomass[this.idx(cx + dx, cy + dy)];
+            }
+          }
+          if (score > bestScore) {
+            bestScore = score;
+            bestX = cx;
+            bestY = cy;
+          }
+        }
+        if (bestX < 0) {
+          // No habitable candidate found; fall back to any spot.
+          bestX = Math.floor(Math.random() * this.width);
+          bestY = Math.floor(Math.random() * this.height);
+        }
+        const i = this.idx(bestX, bestY);
+        this.tileType[i] = TILE.NEST;
+        this.tileIntegrity[i] = 255;
+        this.nests.push({ x: bestX, y: bestY });
       }
     }
 
@@ -460,6 +506,7 @@ const World = (function () {
       this.tileType.fill(TILE.NORMAL);
       this.tileIntegrity.fill(0);
       this.pheromone.fill(0);
+      this.nests = [];
       this.antCount.fill(0);
       this.herbivoreCount.fill(0);
       this.predatorCount.fill(0);
