@@ -26,6 +26,12 @@ const ECS = (function () {
   const alive = new Uint8Array(MAX_ENTITIES);
   // Torpor countdown: 0 = awake, >0 = hibernating for that many ticks.
   const torpor = new Uint8Array(MAX_ENTITIES);
+  // ACO trail state: >0 means the organism is in the homing state and lays
+  // pheromone for that many more ticks. homeX/homeY give the colony nest (or
+  // birthplace) the organism returns to.
+  const fedTrail = new Uint16Array(MAX_ENTITIES);
+  const homeX = new Uint16Array(MAX_ENTITIES);
+  const homeY = new Uint16Array(MAX_ENTITIES);
   // Ancestry: entity ids recycle, so lineages use a separate monotonic id space
   // that never recycles. lineageOriginTick records when a lineage was founded
   // (shared by all descendants), generation is depth from the founder.
@@ -91,6 +97,11 @@ const ECS = (function () {
     species[id] = sp | 0;
     alive[id] = 1;
     torpor[id] = 0;
+    fedTrail[id] = 0;
+    // Home defaults to the spawn position; callers (nest seeding, reproduction)
+    // overwrite it with the colony nest.
+    homeX[id] = x | 0;
+    homeY[id] = y | 0;
 
     // Ancestry bookkeeping. Founders (no ancestry) mint a new lineage id;
     // children inherit the parent's lineage and increment the generation depth.
@@ -214,6 +225,9 @@ const ECS = (function () {
     repId.fill(0xffff);
     repValue.fill(0);
     torpor.fill(0);
+    fedTrail.fill(0);
+    homeX.fill(0);
+    homeY.fill(0);
     telomere.fill(0);
     cellMass.fill(0);
     cellDamage.fill(0);
@@ -237,6 +251,9 @@ const ECS = (function () {
     species,
     alive,
     torpor,
+    fedTrail,
+    homeX,
+    homeY,
     parent,
     lineageId,
     generation,
