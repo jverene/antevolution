@@ -32,6 +32,9 @@ const World = (function () {
     FARM: 2,
   };
 
+  // ACO pheromone trail capacity per cell.
+  const PHEROMONE_MAX = 100;
+
   class WorldGrid {
     constructor() {
       this.width = WIDTH;
@@ -53,6 +56,10 @@ const World = (function () {
       this.tileType = new Uint8Array(this.area);
       // Shelter durability / farm quality.
       this.tileIntegrity = new Uint8Array(this.area);
+
+      // ACO pheromone trail field. Ants deposit it while homing after a meal;
+      // it evaporates every tick. Not persisted in saves (ephemeral).
+      this.pheromone = new Float32Array(this.area);
 
       // Per-species occupancy counts (still used for rendering and movement caps).
       this.antCount = new Uint8Array(this.area);
@@ -338,6 +345,33 @@ const World = (function () {
       }
     }
 
+    // --- Pheromones & nests --------------------------------------------------
+
+    getPheromone(x, y) {
+      return this.pheromone[this.idx(x, y)];
+    }
+
+    depositPheromone(x, y, amount) {
+      const i = this.idx(x, y);
+      const v = this.pheromone[i] + amount;
+      this.pheromone[i] = v > PHEROMONE_MAX ? PHEROMONE_MAX : v;
+    }
+
+    /**
+     * ACO evaporation: every cell loses a fixed fraction of pheromone per tick,
+     * so trails to depleted food sources fade away. Tiny residues snap to zero
+     * to keep the field sparse (sensing ignores trace amounts).
+     */
+    evaporatePheromone(rho) {
+      const p = this.pheromone;
+      const keep = 1 - rho;
+      for (let i = 0; i < p.length; i++) {
+        let v = p[i] * keep;
+        if (v < 0.05) v = 0;
+        p[i] = v;
+      }
+    }
+
     // --- Spawning helpers ------------------------------------------------------
 
     spawnPlantPatch(cx, cy, radius, density) {
@@ -425,6 +459,7 @@ const World = (function () {
       this.growthMultiplier.fill(1);
       this.tileType.fill(TILE.NORMAL);
       this.tileIntegrity.fill(0);
+      this.pheromone.fill(0);
       this.antCount.fill(0);
       this.herbivoreCount.fill(0);
       this.predatorCount.fill(0);
@@ -438,6 +473,7 @@ const World = (function () {
     MAX_ORGANISMS_PER_CELL,
     PLANT_CAPACITY,
     NUTRIENT_CAPACITY,
+    PHEROMONE_MAX,
     SPECIES,
     BIOME,
     TILE,
