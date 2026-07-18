@@ -1370,11 +1370,13 @@ const Simulation = (function () {
           cellMass: cellMass[id],
           cellDamage: cellDamage[id],
           cancerous: cancerous[id],
+          homeX: homeX[id],
+          homeY: homeY[id],
         });
       }
 
       return JSON.stringify({
-        version: 3,
+        version: 4,
         ticks: this.ticks,
         noiseSeed: this.noiseSeed,
         params: {
@@ -1403,6 +1405,7 @@ const Simulation = (function () {
         moisture: this.world.moisture[idx],
         plantBiomass: this.world.plantBiomass[idx],
         nutrients: this.world.nutrients[idx],
+        pheromone: this.world.pheromone[idx],
         tileType: this.world.tileType[idx],
         antCount: this.world.antCount[idx],
         herbivoreCount: this.world.herbivoreCount[idx],
@@ -1447,7 +1450,7 @@ const Simulation = (function () {
     importState(json) {
       try {
         const data = JSON.parse(json);
-        if (data.version !== 1 && data.version !== 2 && data.version !== 3) return false;
+        if (data.version !== 1 && data.version !== 2 && data.version !== 3 && data.version !== 4) return false;
 
         ECS.reset();
         this.world.reset();
@@ -1474,7 +1477,20 @@ const Simulation = (function () {
 
         for (const e of data.entities) {
           const sp = e.species;
-          const g = new Float32Array(e.genome);
+          // Older saves carry shorter genomes (fewer genes / smaller NN). Copy
+          // what exists and backfill the tail with species-typical defaults so
+          // new loci get sane values instead of NaN.
+          const srcGenome = e.genome || [];
+          const g = new Float64Array(GENOME_LENGTH);
+          for (let i = 0; i < Math.min(srcGenome.length, GENOME_LENGTH); i++) {
+            g[i] = srcGenome[i];
+          }
+          if (srcGenome.length < GENOME_LENGTH) {
+            const fallback = createSpeciesGenome(sp);
+            for (let i = srcGenome.length; i < GENOME_LENGTH; i++) {
+              g[i] = fallback[i];
+            }
+          }
           const hasLineage = data.version >= 2 && e.lineageId;
           const id = create(e.x, e.y, sp, e.energy, g, hasLineage ? {
             parentId: 0,
@@ -1492,6 +1508,12 @@ const Simulation = (function () {
               cellMass[id] = e.cellMass != null ? e.cellMass : cellMass[id];
               cellDamage[id] = e.cellDamage != null ? e.cellDamage : 0;
               cancerous[id] = e.cancerous || 0;
+            }
+            // Colony home (v4+); older saves default to the spawn position,
+            // which create() already assigned.
+            if (data.version >= 4 && e.homeX != null && e.homeY != null) {
+              homeX[id] = e.homeX;
+              homeY[id] = e.homeY;
             }
             const mOff = id * Genetics.MEMOME_LENGTH;
             const eMemome = e.memome || [];

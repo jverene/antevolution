@@ -115,9 +115,13 @@ for (let i = 0; i < n; i++) {
 assert(telOk && massOk && damOk, "cellular state values are non-negative");
 
 // Save/load round-trip: export, reimport, verify cellular fields survive.
+let homeSumBefore = 0;
+for (let i = 0; i < ECS.activeCount; i++) {
+  homeSumBefore += ECS.homeX[ECS.active[i]] + ECS.homeY[ECS.active[i]];
+}
 const json = sim.exportState();
 const saved = JSON.parse(json);
-assert(saved.version === 3, "export version is 3");
+assert(saved.version === 4, "export version is 4");
 assert(saved.entities.length > 0, "exported entities exist");
 const e0 = saved.entities[0];
 assert(typeof e0.telomere === "number", "entity has telomere in export");
@@ -126,12 +130,17 @@ assert(typeof e0.cellDamage === "number", "entity has cellDamage in export");
 assert(typeof e0.cancerous === "number", "entity has cancerous in export");
 
 const sBefore = sim.stats();
-assert(sim.importState(json) === true, "importState succeeds with v3 JSON");
+assert(sim.importState(json) === true, "importState succeeds with v4 JSON");
 const sAfter = sim.stats();
 assert(sBefore.avgTelomere === sAfter.avgTelomere, "avgTelomere survives round-trip");
 assert(sBefore.avgDamage === sAfter.avgDamage, "avgDamage survives round-trip");
 assert(sBefore.cancerCount === sAfter.cancerCount, "cancerCount survives round-trip");
 assert(sBefore.ants === sAfter.ants && sBefore.herbivores === sAfter.herbivores,
   "population counts survive round-trip");
+let homeSumAfter = 0;
+for (let i = 0; i < ECS.activeCount; i++) {
+  homeSumAfter += ECS.homeX[ECS.active[i]] + ECS.homeY[ECS.active[i]];
+}
+assert(homeSumBefore === homeSumAfter, "colony homes survive round-trip");
 
 console.log("Quick check passed.");
