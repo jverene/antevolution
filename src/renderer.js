@@ -13,6 +13,7 @@ const Renderer = (function () {
   const YELLOW = 0xff00ffff; // ABGR for RGBA(255,255,0)
   const SHELTER = 0xff8b4513; // ABGR for RGBA(139,69,19)
   const FARM = 0xff00a5ff; // ABGR for RGBA(255,165,0)
+  const NEST = 0xff2d2d8b; // ABGR for RGBA(139,45,45) — dark red colony mound
 
   function rgba(r, g, b, a = 255) {
     return (a << 24) | (b << 16) | (g << 8) | r;
@@ -58,6 +59,7 @@ const Renderer = (function () {
       const biome = world.biome;
       const moisture = world.moisture;
       const tileType = world.tileType;
+      const pheromone = world.pheromone;
       const antCount = world.antCount;
       const herbivoreCount = world.herbivoreCount;
       const predatorCount = world.predatorCount;
@@ -83,6 +85,8 @@ const Renderer = (function () {
           pixels[i] = SHELTER;
         } else if (tt === TILE.FARM) {
           pixels[i] = FARM;
+        } else if (tt === TILE.NEST) {
+          pixels[i] = NEST;
         } else if (plantBiomass[i] > 0) {
           const intensity = Math.min(1, plantBiomass[i] / 600);
           const base = biomeColor(biome[i], moisture[i]);
@@ -92,6 +96,17 @@ const Renderer = (function () {
           const r = Math.floor(br * (1 - intensity) + 25 * intensity);
           const g = Math.floor(bg * (1 - intensity) + 140 * intensity);
           const b = Math.floor(bb * (1 - intensity) + 25 * intensity);
+          pixels[i] = rgba(r, g, b, 255);
+        } else if (pheromone[i] > 1) {
+          // Pheromone trail: blend the biome toward pale cyan by trail strength.
+          const intensity = Math.min(1, pheromone[i] / 60);
+          const base = biomeColor(biome[i], moisture[i]);
+          const br = (base >> 0) & 0xff;
+          const bg = (base >> 8) & 0xff;
+          const bb = (base >> 16) & 0xff;
+          const r = Math.floor(br * (1 - intensity) + 190 * intensity);
+          const g = Math.floor(bg * (1 - intensity) + 240 * intensity);
+          const b = Math.floor(bb * (1 - intensity) + 230 * intensity);
           pixels[i] = rgba(r, g, b, 255);
         } else {
           const base = biomeColor(biome[i], moisture[i]);
