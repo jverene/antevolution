@@ -1211,7 +1211,7 @@ const Simulation = (function () {
     stats() {
       let ants = 0, herbivores = 0, predators = 0, advanced = 0;
       let speed = 0, sense = 0, metabolism = 0, repro = 0, mutability = 0, aggression = 0;
-      let thermal = 0, sociality = 0, wFood = 0, wFlee = 0, wShelter = 0, wFarm = 0;
+      let thermal = 0, sociality = 0, wFood = 0, wFlee = 0, wShelter = 0, wFarm = 0, wPheromone = 0;
       let avgTelomere = 0, avgDamage = 0;
       let cancerCount = 0;
       const n = ECS.activeCount;
@@ -1263,6 +1263,7 @@ const Simulation = (function () {
         wFlee += phenome[pOff + PH.W_FLEE_PREDATOR];
         wShelter += phenome[pOff + PH.W_SHELTER];
         wFarm += phenome[pOff + PH.W_FARM];
+        wPheromone += phenome[pOff + PH.W_PHEROMONE];
 
         // Aggregate cellular-biology sums.
         avgTelomere += telomere[id];
@@ -1307,6 +1308,7 @@ const Simulation = (function () {
         wFlee: n ? wFlee / n : 0,
         wShelter: n ? wShelter / n : 0,
         wFarm: n ? wFarm / n : 0,
+        wPheromone: n ? wPheromone / n : 0,
         avgTelomere: n ? avgTelomere / n : 0,
         avgDamage: n ? avgDamage / n : 0,
         cancerCount,
