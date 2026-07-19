@@ -1,0 +1,353 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #3d2b1f;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+#world {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  image-rendering: pixelated;
+}
+
+#ui {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #f0f0f0;
+  padding: 14px 18px;
+  border-radius: 8px;
+  max-width: 260px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+}
+
+#ui::-webkit-scrollbar {
+  display: none;
+}
+
+#ui h1 {
+  font-size: 18px;
+  margin-bottom: 10px;
+  letter-spacing: 0.5px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.controls button {
+  background: #e8a84b;
+  border: none;
+  color: #1a120b;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.controls button:hover {
+  background: #f5c06a;
+}
+
+.controls button.secondary {
+  background: rgba(232, 168, 75, 0.3);
+  color: #f5c06a;
+}
+
+.controls button.secondary:hover {
+  background: rgba(232, 168, 75, 0.5);
+}
+
+.controls label {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.controls input[type="range"] {
+  width: 80px;
+}
+
+.stats {
+  font-size: 12px;
+  line-height: 1.6;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+}
+
+.stats span {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #f5c06a;
+}
+
+.stat-row.pop { color: #f5c06a; }
+.stat-row.pop span { color: #ffefc2; }
+
+.stat-row.lineage { color: #7dd3fc; }
+.stat-row.lineage span { color: #c2f0ff; }
+
+.stat-row.cell { color: #fca5a5; }
+.stat-row.cell span { color: #ffd1d1; }
+
+.stat-row.trait { color: #86efac; }
+.stat-row.trait span { color: #c7ffd8; }
+
+.stat-row.weight { color: #d8b4fe; }
+.stat-row.weight span { color: #efe0ff; }
+
+.stat-row.event { color: #fcd34d; }
+
+.stats-subheading {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 600;
+  color: #a5f3fc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+.stats-subheading.lineage { color: #7dd3fc; }
+.stats-subheading.cell { color: #fca5a5; }
+
+.stats-divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 4px 0;
+}
+
+.version-link {
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.version-link a {
+  color: #7dd3fc;
+  text-decoration: none;
+}
+
+.version-link a:hover {
+  text-decoration: underline;
+}
+
+.chart-container {
+  width: 100%;
+  height: 140px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.legend {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a5f3fc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #f0f0f0;
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.legend-swatch.plant { background: #198c19; }
+.legend-swatch.ant { background: #000000; }
+.legend-swatch.herbivore { background: #356ad0; }
+.legend-swatch.predator { background: #e84e3b; }
+.legend-swatch.advanced { background: #ffff00; }
+.legend-swatch.shelter { background: #8b4513; }
+.legend-swatch.farm { background: #ffa500; }
+
+.chart-container canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.diversity-panel {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.diversity-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a5f3fc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.diversity-section {
+  margin-bottom: 8px;
+}
+
+.diversity-sublabel {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 2px;
+}
+
+.diversity-hist {
+  display: block;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+}
+
+.diversity-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.cv-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 32px;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+}
+
+.cv-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.cv-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cv-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.cv-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #f5c06a;
+}
+
+.inspect-panel {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.85);
+  color: #f0f0f0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  min-width: 180px;
+  pointer-events: auto;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 10;
+}
+
+.inspect-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 6px;
+}
+
+.inspect-coords {
+  font-weight: 600;
+  color: #f5c06a;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspect-close {
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.inspect-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.inspect-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inspect-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.inspect-value {
+  font-variant-numeric: tabular-nums;
+  color: #f0f0f0;
+}
+
+.inspect-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 6px 0;
+}
